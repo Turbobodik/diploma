@@ -1,0 +1,95 @@
+erDiagram
+    analysis_job {
+        uuid id PK
+        uuid project_id FK
+        varchar kind
+        varchar status
+        smallint progress_pct
+        text error_message
+        timestamptz created_at
+        timestamptz started_at
+        timestamptz finished_at
+    }
+    app_user {
+        uuid id PK
+        varchar email
+        varchar password_hash
+        varchar display_name
+        timestamptz created_at
+    }
+    claim {
+        uuid id PK
+        uuid project_id FK
+        uuid source_document_id FK
+        int char_start
+        int char_end
+        int page_no
+        text text
+        numeric confidence
+        varchar extractor_name
+        timestamptz created_at
+    }
+    claim_evidence {
+        uuid id PK
+        uuid claim_id FK
+        uuid passage_id FK
+        varchar model_name
+        varchar model_label
+        numeric model_score
+        varchar user_label
+        timestamptz updated_at
+    }
+    document {
+        uuid id PK
+        uuid project_id FK
+        varchar original_name
+        varchar media_type
+        int size_bytes
+        char sha256
+        varchar object_key
+        varchar status
+        text error_message
+        int page_count
+        text extracted_text
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    passage {
+        uuid id PK
+        uuid document_id FK
+        int ordinal
+        int page_no
+        int char_start
+        int char_end
+        text text
+    }
+    passage_embedding {
+        uuid passage_id PK,FK
+        varchar model_name PK
+        smallint dimensions
+        real_array vector
+        timestamptz created_at
+    }
+    project {
+        uuid id PK
+        uuid owner_id FK
+        varchar name
+        timestamptz created_at
+    }
+    retrieval_candidate {
+        uuid claim_id PK,FK
+        uuid passage_id PK,FK
+        smallint rank
+        numeric score
+    }
+    project ||--o{ analysis_job : project_id
+    project ||--o{ claim : project_id
+    document ||--o{ claim : source_document_id
+    claim ||--o{ claim_evidence : claim_id
+    passage ||--o{ claim_evidence : passage_id
+    project ||--o{ document : project_id
+    document ||--o{ passage : document_id
+    passage ||--o{ passage_embedding : passage_id
+    app_user ||--o{ project : owner_id
+    claim ||--o{ retrieval_candidate : claim_id
+    passage ||--o{ retrieval_candidate : passage_id

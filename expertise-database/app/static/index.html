@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FactMap Scholar MVP</title>
+  <style>
+    body { font-family: Georgia, serif; margin: 2rem auto; max-width: 52rem; line-height: 1.4; color: #1c1c1c; }
+    h1 { font-size: 1.6rem; }
+    section { margin: 1.5rem 0; }
+    label { display: block; margin-top: 0.6rem; }
+    input, button, select { font: inherit; margin-top: 0.2rem; }
+    button { cursor: pointer; }
+    .row { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+    article { border-top: 1px solid #ccc; padding: 0.8rem 0; }
+    .muted { color: #555; font-size: 0.92rem; }
+    .error { color: #8a1f1f; }
+    .entailment { color: #0b6b2a; }
+    .contradiction { color: #8a1f1f; }
+    .neutral { color: #555; }
+  </style>
+</head>
+<body>
+  <h1>FactMap Scholar</h1>
+  <p class="muted">Database MVP. Upload text, run the stub pipeline, read claims and NLI labels from PostgreSQL.</p>
+  <p id="error" class="error"></p>
+
+  <section id="auth">
+    <h2>Account</h2>
+    <div class="row">
+      <input id="email" type="email" placeholder="email">
+      <input id="password" type="password" placeholder="password (8+)">
+      <input id="name" placeholder="name">
+      <button id="register">Register</button>
+      <button id="login">Sign in</button>
+    </div>
+    <p id="who" class="muted"></p>
+  </section>
+
+  <section id="work" hidden>
+    <h2>Projects</h2>
+    <div class="row">
+      <input id="project-name" placeholder="project name">
+      <button id="create">Create</button>
+    </div>
+    <div id="projects"></div>
+
+    <h2>Documents</h2>
+    <div class="row">
+      <input id="file" type="file" accept=".txt,.pdf,text/plain,application/pdf">
+      <button id="upload">Upload</button>
+      <button id="analyze">Run analysis</button>
+      <button id="remove">Delete project</button>
+    </div>
+    <div id="documents"></div>
+
+    <h2>Claims</h2>
+    <div id="claims"></div>
+  </section>
+
+  <script>
+    let token = localStorage.getItem("token") || "";
+    let projectId = null;
+
+    const errorBox = document.querySelector("#error");
+    function showError(message) { errorBox.textContent = message || ""; }
+
+    async function api(path, options = {}) {
+      const headers = options.headers || {};
+      if (token) headers.Authorization = "Bearer " + token;
+      const response = await fetch(path, { ...options, headers });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || response.statusText);
+      return body;
+    }
+
+    function signedIn(user) {
+      document.querySelector("#who").textContent = user.display_name + " · " + user.email;
+      document.querySelector("#work").hidden = false;
+      loadProjects();
+    }
+
+    document.querySelector("#register").onclick = async () => {
+      showError("");
+      try {
+        const body = await api("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: email.value, password: password.value, display_name: name.value
+          })
+        });
+        token = body.token;
+        localStorage.setItem("token", token);
+        signedIn(body.user);
+      } catch (err) { showError(err.message); }
+    };
+
+    document.querySelector("#login").onclick = async () => {
+      showError("");
+      try {
+        const body = await api("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.value, password: password.value })
+        });
+        token = body.token;
+        localStorage.setItem("token", token);
+        signedIn(body.user);
+      } catch (err) { showError(err.message); }
+    };
+
+    async function loadProjects() {
+      const body = await api("/api/projects");
+      const box = document.querySelector("#projects");
+      box.innerHTML = "";
+      for (const project of body.projects) {
+        const button = document.createElement("button");
+        button.textContent = project.name;
+        button.onclick = () => selectProject(project.id);
+        box.appendChild(button);
+      }
+    }
+
+    async function selectProject(id) {
+      projectId = id;
+      showError("");
+      const docs = await api("/api/projects/" + id + "/documents");
+      const claims = await api("/api/projects/" + id + "/claims");
+      renderDocuments(docs.documents);
+      renderClaims(claims.claims);
+    }
+
+    function renderDocuments(documents) {
+      const box = document.querySelector("#documents");
+      box.innerHTML = "";
+      for (const doc of documents) {
+        const p = document.createElement("p");
+        p.textContent = doc.original_name + " — " + doc.status + (doc.error_message ? " (" + doc.error_message + ")" : "");
+        box.appendChild(p);
+      }
+    }
+
+    function renderClaims(claims) {
+      const box = document.querySelector("#claims");
+      box.innerHTML = "";
+      if (!claims.length) {
+        box.innerHTML = "<p class='muted'>No claims yet.</p>";
+        return;
+      }
+      for (const claim of claims) {
+        const article = document.createElement("article");
+        const supporting = claim.evidence.filter(e => (e.user_label || e.model_label) !== "neutral");
+        const title = document.createElement("p");
+        title.textContent = claim.text;
+        article.appendChild(title);
+        const meta = document.createElement("p");
+        meta.className = "muted";
+        meta.textContent = claim.source_name + " · " + claim.extractor_name
+          + (supporting.length ? "" : " · no supporting/contradicting evidence found");
+        article.appendChild(meta);
+        for (const edge of claim.evidence) {
+          const line = document.createElement("p");
+          const shown = edge.user_label || edge.model_label;
+          line.className = shown;
+          line.textContent = shown + " " + edge.model_score + " · " + edge.document_name + " ";
+          const select = document.createElement("select");
+          for (const option of ["", "entailment", "contradiction", "neutral"]) {
+            const node = document.createElement("option");
+            node.value = option;
+            node.textContent = option || "no override";
+            if ((edge.user_label || "") === option) node.selected = true;
+            select.appendChild(node);
+          }
+          select.onchange = async () => {
+            showError("");
+            try {
+              await api("/api/evidence/" + edge.id, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_label: select.value || null })
+              });
+              selectProject(projectId);
+            } catch (err) { showError(err.message); }
+          };
+          line.appendChild(select);
+          const quote = document.createElement("span");
+          quote.className = "muted";
+          quote.textContent = " " + edge.passage_text.slice(0, 180);
+          line.appendChild(quote);
+          article.appendChild(line);
+        }
+        box.appendChild(article);
+      }
+    }
+
+    document.querySelector("#create").onclick = async () => {
+      showError("");
+      try {
+        const project = await api("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: projectName.value })
+        });
+        projectId = project.id;
+        await loadProjects();
+        selectProject(project.id);
+      } catch (err) { showError(err.message); }
+    };
+
+    document.querySelector("#upload").onclick = async () => {
+      if (!projectId || !file.files[0]) return;
+      showError("");
+      const data = new FormData();
+      data.append("file", file.files[0]);
+      try {
+        await api("/api/projects/" + projectId + "/documents", { method: "POST", body: data });
+        selectProject(projectId);
+      } catch (err) { showError(err.message); }
+    };
+
+    document.querySelector("#analyze").onclick = async () => {
+      if (!projectId) return;
+      showError("");
+      try {
+        await api("/api/projects/" + projectId + "/analyze", { method: "POST" });
+        selectProject(projectId);
+      } catch (err) { showError(err.message); }
+    };
+
+    document.querySelector("#remove").onclick = async () => {
+      if (!projectId) return;
+      showError("");
+      try {
+        await api("/api/projects/" + projectId, { method: "DELETE" });
+        projectId = null;
+        document.querySelector("#documents").innerHTML = "";
+        document.querySelector("#claims").innerHTML = "";
+        loadProjects();
+      } catch (err) { showError(err.message); }
+    };
+
+    const email = document.querySelector("#email");
+    const password = document.querySelector("#password");
+    const name = document.querySelector("#name");
+    const projectName = document.querySelector("#project-name");
+    const file = document.querySelector("#file");
+  </script>
+</body>
+</html>
