@@ -1,31 +1,19 @@
-# Authentication & Security Guide
+# Authentication and Security
 
-FactMap Scholar uses **Argon2id** for one-way password hashing and **RFC 7519 Bearer JSON Web Tokens (JWT)** for stateless API authentication.
+Passwords are hashed with Argon2id (`argon2-cffi`). Requests to protected endpoints use RFC 7519 Bearer JWTs (`PyJWT`).
 
----
+## 1. Scheme and route access
 
-## 1. Authentication Scheme
+- OpenAPI security scheme: `HTTPBearer` (`type: http`, `scheme: bearer`)
+- Header format: `Authorization: Bearer <access_token>`
+- Public routes (`security: []`): `GET /health`, `GET /metrics`, `POST /api/v1/auth/register`, `POST /api/v1/auth/login`
+- Protected routes: all remaining endpoints under `/api/v1/*`. Every query scopes data to the authenticated `owner_id`.
 
-- **OpenAPI Security Scheme:** `HTTPBearer` (`type: http`, `scheme: bearer`)
-- **HTTP Header:** `Authorization: Bearer <access_token>`
-- **Public Endpoints (`security: []`):**
-  - `GET /health`
-  - `GET /metrics`
-  - `POST /api/v1/auth/register`
-  - `POST /api/v1/auth/login`
-- **Protected Endpoints:** Every other route under `/api/v1/*` requires a valid Bearer JWT and enforces strict owner isolation (a user can never read, modify, or delete another user's projects, documents, claims, or evidence edges).
+## 2. Password hashing and JWT claims
 
----
-
-## 2. Password & Token Lifecycle
-
-### Password Storage
-- Passwords must be **8 to 200 characters** on registration (`POST /api/v1/auth/register`).
-- Emails are normalized (`trim().lower()`) before lookup and uniqueness checks.
-- Passwords are hashed via `argon2-cffi` (**Argon2id**) with per-password cryptographic salt; plaintext passwords are never persisted or logged.
-
-### JWT Structure & Claims
-Tokens are signed with `HS256` (configurable via `JWT_ALGORITHM`) using `JWT_SECRET` (env var only):
+- Registration requires passwords of 8-200 characters. Emails are trimmed and lowercased before storage and lookup.
+- Passwords are stored as Argon2id hashes with per-password salt. Plaintext passwords are never stored or logged.
+- Tokens are signed with `HS256` (`JWT_ALGORITHM`) using `JWT_SECRET` from environment variables:
 
 ```json
 {
@@ -37,24 +25,17 @@ Tokens are signed with `HS256` (configurable via `JWT_ALGORITHM`) using `JWT_SEC
 }
 ```
 
-| Claim | Value / Rule |
+| Claim | Rule |
 |---|---|
-| `sub` | Authenticated researcher's UUID (`app_user.id`) |
+| `sub` | Authenticated `app_user.id` (UUID) |
 | `iss` | Must equal `factmap-scholar` |
 | `type` | Must equal `access` |
 | `iat` | Issued-at UNIX timestamp (UTC) |
-| `exp` | Expiration UNIX timestamp (`iat + JWT_TTL_SECONDS`, default `86400` = 24 hours) |
+| `exp` | Expiration UNIX timestamp (`iat + JWT_TTL_SECONDS`, default `86400`) |
 
-### Token Validation Sequence
-On every protected request, `get_current_user_id` (`backend/app/api/deps.py`):
-1. Verifies the `Authorization` header starts with `Bearer `.
-2. Verifies JWT signature, `iss`, `type`, and `exp`.
-3. Confirms the `sub` user still exists in the database.
-4. On any failure, responds with `401 Unauthorized` (`code: "unauthorized"`).
+On each protected request, `get_current_user_id` (`backend/app/api/deps.py`) verifies the `Bearer` prefix, validates signature, `iss`, `type`, and `exp`, and checks that the user still exists. Any failure returns `401 Unauthorized` (`code: "unauthorized"`).
 
----
-
-## 3. Handling `401 Unauthorized`
+## 3. Handling 401 responses
 
 ```json
 {
@@ -64,19 +45,12 @@ On every protected request, `get_current_user_id` (`backend/app/api/deps.py`):
 }
 ```
 
-Recommended client recovery:
-1. Discard the cached access token immediately.
-2. Prompt the user to re-authenticate via `POST /api/v1/auth/login` (or redirect the SPA to `/login`).
-3. Verify the restored session on startup via `GET /api/v1/auth/me`.
+Clients should clear the cached token on `401` and prompt for sign-in via `POST /api/v1/auth/login`. To check a persisted token on startup, call `GET /api/v1/auth/me`.
 
----
+## 4. Security notes
 
-## 4. Security Warnings & Best Practices
-
-> [!CAUTION]
-> **Never commit `JWT_SECRET`, database credentials, or live tokens to Git.** Configure `JWT_SECRET` exclusively through environment variables or a secret manager (minimum 32 cryptographically random bytes).
-
-- **Use HTTPS (TLS 1.2+) in production:** Bearer tokens grant full access to the researcher's workspaces until expiration and must never traverse unencrypted public networks.
-- **Avoid URL Query Parameters for Tokens:** Always transmit JWTs in the `Authorization` header — never in query strings, where tokens leak into access logs and browser history.
-- **Validate CORS Origins:** Restrict `CORS_ORIGINS` in production to your exact frontend origins rather than `*`.
-- **Cross-Project Isolation:** Both service-layer ownership checks and PostgreSQL database triggers (`trg_claim_same_project`, `trg_candidate_same_project`, `trg_evidence_same_project`) prevent cross-project data leakage. Accessing another user's project UUID intentionally returns `404 Not Found` rather than `403` to avoid leaking resource existence.
+- Never commit `JWT_SECRET`, database credentials, or live tokens to Git. Set `JWT_SECRET` to at least 32 random bytes via environment variables.
+- Always serve production traffic over HTTPS so Bearer tokens are encrypted in transit.
+- Do not pass JWTs in URL query parameters; use the `Authorization` header only.
+- Set `CORS_ORIGINS` in production to explicit allowed frontend origins.
+- Accessing another user's project or evidence UUID returns `404 Not Found` rather than `403` to avoid leaking resource existence. PostgreSQL triggers (`trg_claim_same_project`, `trg_candidate_same_project`, `trg_evidence_same_project`) also enforce project isolation at the DB level.

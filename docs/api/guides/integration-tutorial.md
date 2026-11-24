@@ -1,12 +1,10 @@
-# Step-by-Step Integration Tutorial
+# Integration Tutorial
 
-This tutorial walks through a complete real-world integration with the **FactMap Scholar API**: authenticating, creating a workspace, uploading two scientific papers, running the asynchronous ML verification pipeline, polling job progress, inspecting the evidence map, overriding an NLI label, exporting results, and performing GDPR cascade deletion.
+This walkthrough covers a full client integration: authenticate, create a project, upload two text papers, trigger analysis, poll job status, query claims and the evidence graph, override an NLI label, export JSON/CSV, and delete the project.
 
-A fully executable bash version of this tutorial is available in [`../examples/walkthrough.sh`](../examples/walkthrough.sh).
+An executable version of these commands is in [`../examples/walkthrough.sh`](../examples/walkthrough.sh).
 
----
-
-## Step 1: Authenticate (`POST /api/v1/auth/register` or `/login`)
+## Step 1: Authenticate
 
 ```bash
 BASE_URL="http://127.0.0.1:8000"
@@ -19,7 +17,6 @@ AUTH_JSON=$(curl -s -X POST "$BASE_URL/api/v1/auth/register" \
     "display_name": "Tutorial Researcher"
   }')
 
-# If already registered (409), sign in instead:
 if echo "$AUTH_JSON" | grep -q "duplicate_email"; then
   AUTH_JSON=$(curl -s -X POST "$BASE_URL/api/v1/auth/login" \
     -H "Content-Type: application/json" \
@@ -29,9 +26,7 @@ fi
 TOKEN=$(echo "$AUTH_JSON" | jq -r '.token')
 ```
 
----
-
-## Step 2: Create a Project Workspace (`POST /api/v1/projects`)
+## Step 2: Create a project
 
 ```bash
 PROJECT_ID=$(curl -s -X POST "$BASE_URL/api/v1/projects" \
@@ -42,11 +37,9 @@ PROJECT_ID=$(curl -s -X POST "$BASE_URL/api/v1/projects" \
 echo "Created project: $PROJECT_ID"
 ```
 
----
+## Step 3: Upload two documents
 
-## Step 3: Upload Two Scientific Publications (`POST /api/v1/projects/{id}/documents`)
-
-Documents must be `application/pdf` or `text/plain` (`<= 20 MB`). Uploading an identical file (by SHA-256 hash) into the same project returns `409 Conflict` (`duplicate_file`).
+Accepted types are `application/pdf` and `text/plain` up to 20 MB. Re-uploading an identical file (by SHA-256) in the same project returns `409 Conflict` (`duplicate_file`).
 
 ```bash
 curl -s -X POST "$BASE_URL/api/v1/projects/$PROJECT_ID/documents" \
@@ -58,18 +51,14 @@ curl -s -X POST "$BASE_URL/api/v1/projects/$PROJECT_ID/documents" \
   -F "file=@backend/scripts/sample_b.txt;type=text/plain" | jq
 ```
 
-Verify both documents reached `"status": "ready"`:
+Check extraction status:
 
 ```bash
 curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/documents" \
   -H "Authorization: Bearer $TOKEN" | jq '.documents[] | {original_name, status, size_bytes}'
 ```
 
----
-
-## Step 4: Start Asynchronous Verification & Poll Progress
-
-Trigger the 3-stage pipeline (`extract_claims` → `retrieve` → `nli`):
+## Step 4: Trigger analysis and poll jobs
 
 ```bash
 curl -s -X POST "$BASE_URL/api/v1/projects/$PROJECT_ID/analyze" \
@@ -90,7 +79,7 @@ Response (`202 Accepted`):
 }
 ```
 
-Poll `GET /api/v1/projects/{project_id}/jobs` until no jobs are `queued` or `running`:
+Poll `/jobs` until no job is `queued` or `running`:
 
 ```bash
 while true; do
@@ -103,11 +92,7 @@ while true; do
 done
 ```
 
----
-
-## Step 5: Query Filtered Claims & Evidence Graph
-
-### Filtered Claims List (`GET /api/v1/projects/{id}/claims`)
+## Step 5: Query claims and the evidence graph
 
 ```bash
 CLAIMS_JSON=$(curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/claims?limit=20&offset=0" \
@@ -116,24 +101,18 @@ CLAIMS_JSON=$(curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/claims?limit=20&off
 echo "$CLAIMS_JSON" | jq '.claims[] | {id, text, confidence, has_evidence, evidence_count: (.evidence | length)}'
 ```
 
-You can combine query parameters:
-- `label=entailment|contradiction|neutral`
-- `document_id=<uuid>`
-- `search=<substring>` (case-insensitive across claim text and document title)
-- `limit=1..200`, `offset>=0`
+Supported query parameters on `/claims`: `label` (`entailment|contradiction|neutral`), `document_id`, `search` (case-insensitive substring), `limit` (`1..200`), `offset` (`>= 0`).
 
-### Evidence Graph (`GET /api/v1/projects/{id}/graph`)
+Fetch the graph (`include_neutral=false` hides neutral edges):
 
 ```bash
 curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/graph?include_neutral=false" \
   -H "Authorization: Bearer $TOKEN" | jq '{node_count: (.nodes | length), edge_count: (.edges | length)}'
 ```
 
----
+## Step 6: Override an NLI label
 
-## Step 6: Record a Researcher Override (`PATCH /api/v1/evidence/{evidence_id}`)
-
-Human overrides update `user_label` and `effective_label` while **preserving `model_label` and `model_score`** for scientific auditability.
+`PATCH /api/v1/evidence/{evidence_id}` updates `user_label` and `effective_label` without modifying `model_label` or `model_score`.
 
 ```bash
 EVIDENCE_ID=$(echo "$CLAIMS_JSON" | jq -r '.claims[0].evidence[0].id')
@@ -144,32 +123,26 @@ curl -s -X PATCH "$BASE_URL/api/v1/evidence/$EVIDENCE_ID" \
   -d '{"user_label": "contradiction"}' | jq
 ```
 
-To restore the original model prediction, send `{"user_label": null}`.
+Send `{"user_label": null}` to clear the override and revert to `model_label`.
 
----
-
-## Step 7: Export Structured Results (`GET /api/v1/projects/{id}/export`)
+## Step 7: Export JSON or CSV
 
 ```bash
-# JSON export
 curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/export?format=json" \
   -H "Authorization: Bearer $TOKEN" -o "factmap-export.json"
 
-# CSV export (supports label & document_id filters)
 curl -s "$BASE_URL/api/v1/projects/$PROJECT_ID/export?format=csv&label=contradiction" \
   -H "Authorization: Bearer $TOKEN" -o "factmap-contradictions.csv"
 ```
 
----
-
-## Step 8: Cascade Delete Workspace (`DELETE /api/v1/projects/{id}`)
+## Step 8: Delete the project
 
 ```bash
 curl -s -X DELETE "$BASE_URL/api/v1/projects/$PROJECT_ID" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-Expected response (`200 OK`):
+Response (`200 OK`):
 
 ```json
 {
@@ -177,19 +150,16 @@ Expected response (`200 OK`):
 }
 ```
 
----
+## TypeScript client snippet
 
-## TypeScript Client Example (Axios)
-
-The production React SPA in [`frontend/src/services/`](../../../frontend/src/services/) implements this exact workflow using typed Axios services:
+The frontend services in [`frontend/src/services/`](../../../frontend/src/services/) wrap the same endpoints via Axios:
 
 ```ts
 import { authService } from '../../../frontend/src/services/authService';
 import { projectService } from '../../../frontend/src/services/projectService';
 import { workspaceService } from '../../../frontend/src/services/workspaceService';
 
-const { token } = await authService.login({ email: 'tutorial@ehu.lt', password: 'TutorialPassword123!' });
-// token is persisted and injected via httpClient request interceptor
+await authService.login({ email: 'tutorial@ehu.lt', password: 'TutorialPassword123!' });
 const project = await projectService.createProject({ name: 'NLI Study' });
 await workspaceService.uploadDocument(project.id, file);
 await workspaceService.startAnalysis(project.id);

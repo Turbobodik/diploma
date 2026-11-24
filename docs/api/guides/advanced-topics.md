@@ -1,21 +1,12 @@
-# Advanced API Design Topics
+# Advanced Topics
 
-This guide covers production integration patterns for the FactMap Scholar API: asynchronous job polling, pagination, rate limiting, idempotency, distributed tracing, and versioning.
+## 1. Async jobs and polling
 
----
+`POST /api/v1/projects/{project_id}/analyze` returns `202 Accepted` and creates three sequential jobs:
 
-## 1. Asynchronous Job Execution & Polling
-
-ML inference (claim extraction, dense embedding retrieval, and DeBERTa NLI cross-encoding) runs asynchronously in background workers to avoid HTTP timeouts.
-
-### Stage Lifecycle
-`POST /api/v1/projects/{project_id}/analyze` returns `202 Accepted` and enqueues three sequential jobs:
-
-1. `extract_claims` — segments documents into passages and detects claim-worthy sentences with exact `[char_start, char_end)` spans.
-2. `retrieve` — embeds passages and claims (`BAAI/bge-small-en-v1.5`) and retrieves Top-K candidates (`TOP_K`, default `5`).
-3. `nli` — scores each `(passage, claim)` pair (`cross-encoder/nli-deberta-v3-xsmall`) with post-hoc calibrated class priors (`entailment`, `contradiction`, `neutral`).
-
-### Job Status Transitions
+1. `extract_claims`: chunks ready documents into passages and extracts claims with exact `[char_start, char_end)` spans.
+2. `retrieve`: embeds passages and claims (`BAAI/bge-small-en-v1.5`) and retrieves top-K candidates (`TOP_K`, default `5`).
+3. `nli`: scores each `(passage, claim)` pair (`cross-encoder/nli-deberta-v3-xsmall`) with calibrated class priors (`entailment`, `contradiction`, `neutral`).
 
 ```mermaid
 stateDiagram-v2
@@ -27,68 +18,54 @@ stateDiagram-v2
   failed --> [*]
 ```
 
-### Polling Recommendations
-- Poll `GET /api/v1/projects/{project_id}/jobs` every **2–3 seconds** while any job has `status` in `["queued", "running"]`.
-- Avoid calling `POST /analyze` again while a run is active — the API enforces mutual exclusion per project and responds with `409 Conflict` (`already_running`).
-- Check `error_message` whenever `status == "failed"`.
-- Note: `?sync=true` executes inline and is strictly intended for automated tests and CLI scripts.
+- Poll `GET /api/v1/projects/{project_id}/jobs` every 2-3 seconds while any job is `queued` or `running`.
+- Calling `POST /analyze` while a run is active returns `409 Conflict` (`already_running`).
+- Check `error_message` if a job enters `failed`.
+- `?sync=true` runs inline and is meant for smoke tests and CLI scripts only.
 
----
+## 2. Pagination
 
-## 2. Pagination Strategy
+Collection endpoints use offset pagination and return `total`, `limit`, and `offset`:
 
-All collection endpoints use **offset-based pagination** with explicit total counts:
-
-| Endpoint | Query Parameters | Default `limit` | Max `limit` | Response Envelope |
+| Endpoint | Query Parameters | Default `limit` | Max `limit` | Envelope |
 |---|---|---:|---:|---|
-| `GET /api/v1/projects` | `limit`, `offset` | `50` | `200` | `{ projects, total, limit, offset }` |
-| `GET /api/v1/projects/{id}/documents` | `limit`, `offset` | `50` | `200` | `{ documents, total, limit, offset }` |
-| `GET /api/v1/projects/{id}/claims` | `limit`, `offset`, `label`, `document_id`, `search` | `50` | `200` | `{ claims, total, limit, offset, jobs }` |
+| `GET /api/v1/projects` | `limit`, `offset` | 50 | 200 | `{ projects, total, limit, offset }` |
+| `GET /api/v1/projects/{id}/documents` | `limit`, `offset` | 50 | 200 | `{ documents, total, limit, offset }` |
+| `GET /api/v1/projects/{id}/claims` | `limit`, `offset`, `label`, `document_id`, `search` | 50 | 200 | `{ claims, total, limit, offset, jobs }` |
 
-Requesting `limit < 1`, `limit > 200`, or `offset < 0` returns `422 Unprocessable Entity` (`validation_error`).
+Values outside `limit` (`1..200`) or `offset` (`>= 0`) return `422 Unprocessable Entity` (`validation_error`).
 
----
+## 3. Rate limiting
 
-## 3. Rate Limiting (NFR-06)
+`POST /api/v1/projects/{id}/documents` and `POST /api/v1/projects/{id}/analyze` use a per-client sliding-window limiter keyed by `(user_id, client_ip)`:
 
-Compute-intensive endpoints (`POST /api/v1/projects/{id}/documents` and `POST /api/v1/projects/{id}/analyze`) are protected by a per-client **sliding-window rate limiter** keyed by `(user_id, client_ip)`:
+- Default quota: `60 requests / 60 seconds` (`RATE_LIMIT_PER_MINUTE`).
+- Response headers on allowed calls: `X-RateLimit-Limit`, `X-RateLimit-Remaining`.
+- When exceeded: `429 Too Many Requests` with `Retry-After` (seconds) and:
 
-- **Default quota:** `60 requests / 60 seconds` (configurable via `RATE_LIMIT_PER_MINUTE`).
-- **Response headers on allowed calls:**
-  - `X-RateLimit-Limit: 60`
-  - `X-RateLimit-Remaining: 59`
-- **Behavior when exceeded:**
-  - Status: `429 Too Many Requests`
-  - Header: `Retry-After: <seconds>`
-  - Body:
-    ```json
-    {
-      "code": "rate_limited",
-      "message": "Rate limit exceeded. Retry after 12 seconds.",
-      "request_id": "a91f0c44-2c13-4b3b-86d0-8f0c8122f1aa"
-    }
-    ```
-- **Client strategy:** Honor the `Retry-After` header with exponential jittered backoff rather than retrying immediately.
+```json
+{
+  "code": "rate_limited",
+  "message": "Rate limit exceeded. Retry after 12 seconds.",
+  "request_id": "a91f0c44-2c13-4b3b-86d0-8f0c8122f1aa"
+}
+```
 
----
+Wait for `Retry-After` seconds before retrying.
 
-## 4. Idempotency & Deduplication
+## 4. Idempotency and deduplication
 
-- **Document uploads (`POST /documents`):** Every uploaded payload is hashed with **SHA-256**. Re-uploading an identical file into the same project is rejected safely with `409 Conflict` (`duplicate_file`) without creating duplicate storage files or duplicate passages.
-- **Label overrides (`PATCH /evidence/{id}`):** Fully idempotent — repeating the same `{"user_label": "contradiction"}` or `{"user_label": null}` produces the exact same state and preserves `model_label`.
-- **Project creation (`POST /projects`):** Enforces case-insensitive per-owner uniqueness (`409 Conflict`, `duplicate_name`).
+- Document uploads (`POST /documents`): SHA-256 hash is checked per project. Duplicate files return `409 Conflict` (`duplicate_file`) without creating extra files or passages.
+- Label overrides (`PATCH /evidence/{id}`): idempotent; repeating the same payload produces the same state and never changes `model_label`.
+- Project creation (`POST /projects`): rejects case-insensitive duplicate names per owner (`409 Conflict`, `duplicate_name`).
 
----
+## 5. Request tracing and metrics
 
-## 5. Request Tracing & Observability
+- `X-Request-ID`: if sent by the client, it is preserved; otherwise a UUIDv4 is generated. The value is returned in the response header, written to JSON logs, and included in `ErrorOut.request_id`.
+- `GET /metrics`: Prometheus text metrics (`factmap_http_requests_total`, `factmap_http_request_duration_seconds`).
 
-- **Correlation ID (`X-Request-ID`):** Clients may pass an `X-Request-ID` header on any request; if omitted, the middleware generates a UUIDv4. The exact ID is echoed in the response `X-Request-ID` header, included in structured JSON server logs, and embedded inside every `ErrorOut.request_id` payload.
-- **Prometheus Metrics (`GET /metrics`):** Exposes `factmap_http_requests_total` and `factmap_http_request_duration_seconds` histograms labeled by HTTP method, route template, and status code.
-
----
-
-## 6. API Versioning Policy
+## 6. Versioning
 
 - All business endpoints live under `/api/v1`.
-- Breaking changes (removing fields, renaming keys, changing status semantics) require introducing `/api/v2`.
-- Non-breaking additions (new optional fields, new filter query parameters, new endpoints) are released under `/api/v1` and documented in [`../README.md#changelog`](../README.md#changelog).
+- Breaking changes require a new major prefix (`/api/v2`).
+- Additive changes (optional response fields, new query parameters with defaults, new routes) stay in `/api/v1` and are logged in [`../README.md#changelog`](../README.md#changelog).
