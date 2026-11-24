@@ -23,8 +23,8 @@ Hosted on Render free tier, so the first request after inactivity may take 30-50
 - Structure: `components/` (reusable UI kit and layout), `features/` (`auth`, `projects`, `workspace`), `pages/` (5 lazy-loaded routes + 404), `routes/`, `services/` (Axios client and interceptors), `store/` (Redux Toolkit slices and selectors), `models/`, `hooks/`, `styles/`
 - Forms with validation: [AuthForm.tsx](frontend/src/features/auth/AuthForm.tsx), [CreateProjectForm.tsx](frontend/src/features/projects/CreateProjectForm.tsx), [DocumentUploader.tsx](frontend/src/features/workspace/DocumentUploader.tsx), [ClaimDetailDrawer.tsx](frontend/src/features/workspace/ClaimDetailDrawer.tsx)
 - Error handling and loading states: [httpClient.ts](frontend/src/services/httpClient.ts), [ErrorBoundary.tsx](frontend/src/components/common/ErrorBoundary.tsx), [ToastContainer.tsx](frontend/src/components/common/ToastContainer.tsx), [Skeleton.tsx](frontend/src/components/common/Skeleton.tsx)
-- Evidence graph and tables: [EvidenceMap.tsx](frontend/src/features/workspace/EvidenceMap.tsx), [ClaimsTable.tsx](frontend/src/features/workspace/ClaimsTable.tsx), [ProjectTable.tsx](frontend/src/features/projects/ProjectTable.tsx)
-- Tests: 6 Vitest unit suites (17 tests) under `frontend/src/**/*.test.*` and Playwright E2E specs in [frontend/e2e/app.spec.ts](frontend/e2e/app.spec.ts) and [frontend/e2e/adaptive.spec.ts](frontend/e2e/adaptive.spec.ts)
+- Evidence graph and inspector: [EvidenceMap.tsx](frontend/src/features/workspace/EvidenceMap.tsx) (full-width interactive graph, auto-focus mode, verdict-priority sorting), [ClaimDetailDrawer.tsx](frontend/src/features/workspace/ClaimDetailDrawer.tsx) (overlay drawer with key-sentence highlighting and Show more/less), [ClaimsTable.tsx](frontend/src/features/workspace/ClaimsTable.tsx), [ProjectTable.tsx](frontend/src/features/projects/ProjectTable.tsx), collapsible navigation in [AppShell.tsx](frontend/src/components/layout/AppShell.tsx), and one-click Russian CyberLeninka demo launcher in [ProjectsPage.tsx](frontend/src/pages/ProjectsPage.tsx)
+- Tests: 6 Vitest unit suites (21 tests) under `frontend/src/**/*.test.*` and Playwright E2E specs in [frontend/e2e/app.spec.ts](frontend/e2e/app.spec.ts) and [frontend/e2e/adaptive.spec.ts](frontend/e2e/adaptive.spec.ts)
 
 ### API documentation
 
@@ -47,10 +47,10 @@ Hosted on Render free tier, so the first request after inactivity may take 30-50
 ### Back-end
 
 - Stack: FastAPI, PostgreSQL 16 ([backend/ddl/001_init.sql](backend/ddl/001_init.sql)), SQLAlchemy 2.0 ORM ([orm.py](backend/app/models/orm.py))
-- Layered layout: `backend/app/api/v1/` (routers), `backend/app/services/` (business logic), `backend/app/repositories/` (data access), `backend/app/models/` (ORM + Pydantic), `backend/app/core/` (config, security, errors, logging, metrics, rate limit, cache)
+- Layered layout: `backend/app/api/v1/` (routers, including one-click `POST /api/v1/projects/demo` Russian CyberLeninka corpus), `backend/app/services/` (business logic), `backend/app/repositories/` (data access), `backend/app/models/` (ORM + Pydantic), `backend/app/core/` (config, security, errors, logging, metrics, rate limit, cache), `backend/app/ml/` (multilingual EN/RU chunking, claim extraction, retrieval, and NLI)
 - Security: Argon2id password hashing + RFC 7519 Bearer JWT ([security.py](backend/app/core/security.py), [deps.py](backend/app/api/deps.py))
 - Observability and errors: [exceptions.py](backend/app/core/exceptions.py), [logging.py](backend/app/core/logging.py) (`X-Request-ID`), [metrics.py](backend/app/core/metrics.py), [rate_limit.py](backend/app/core/rate_limit.py)
-- Tests and quality checks: `pytest --cov=app --cov-fail-under=80` (15 passed, 87.5% coverage), `ruff check`, `pip-audit`
+- Tests and quality checks: `pytest --cov=app --cov-fail-under=80` (17 passed, 88.2% coverage), `ruff check`, `pip-audit`
 - Deployment and CI: [docker-compose.yml](docker-compose.yml), [backend/Dockerfile](backend/Dockerfile), [frontend/Dockerfile](frontend/Dockerfile), [render.yaml](render.yaml), [.github/workflows/ci.yml](.github/workflows/ci.yml)
 
 ## Running the project
