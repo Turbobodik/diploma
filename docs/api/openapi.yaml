@@ -1,0 +1,1678 @@
+openapi: 3.1.0
+info:
+  title: FactMap Scholar API
+  summary: Automatic scientific claim extraction and NLI-based evidence verification
+    service.
+  description: FactMap Scholar extracts atomic claims with exact character spans from
+    uploaded scientific PDF/TXT publications, retrieves candidate evidence passages
+    using dense embeddings, classifies claim–passage pairs via 3-way Natural Language
+    Inference (`entailment`, `contradiction`, `neutral`), and exposes a queryable
+    evidence graph.
+  contact:
+    name: Bahdan Kanoplich
+    email: 20230498@student.ehu.lt
+  license:
+    name: MIT License
+  version: 1.0.0
+paths:
+  /health:
+    get:
+      tags:
+      - system
+      summary: Service health and active ML configuration
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthOut'
+  /metrics:
+    get:
+      tags:
+      - system
+      summary: Prometheus instrumentation metrics
+      operationId: metrics_metrics_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /api/v1/auth/register:
+    post:
+      tags:
+      - auth
+      summary: Register a researcher account
+      operationId: register_api_v1_auth_register_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthOut'
+        '409':
+          description: Email is already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Invalid email or password shorter than 8 characters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth
+      summary: Authenticate with email and password
+      operationId: login_api_v1_auth_login_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthOut'
+        '401':
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/me:
+    get:
+      tags:
+      - auth
+      summary: Return the currently authenticated user profile
+      operationId: me_api_v1_auth_me_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '401':
+          description: Missing or expired Bearer JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+      security:
+      - HTTPBearer: []
+  /api/v1/projects:
+    get:
+      tags:
+      - projects
+      summary: List projects owned by the authenticated user
+      operationId: list_projects_api_v1_projects_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - projects
+      summary: Create a new analysis project workspace
+      operationId: create_project_api_v1_projects_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '409':
+          description: Duplicate project name for this owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Empty or invalid project name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+  /api/v1/projects/{project_id}:
+    delete:
+      tags:
+      - projects
+      summary: Delete a project and cascade all documents, claims, evidence, and stored
+        files (GDPR US-11)
+      operationId: delete_project_api_v1_projects__project_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found or owned by another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/documents:
+    get:
+      tags:
+      - documents
+      summary: List documents and extraction statuses in a project
+      operationId: list_documents_api_v1_projects__project_id__documents_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    post:
+      tags:
+      - documents
+      summary: Upload a scientific PDF or plain text file (<= 20 MB) and extract text
+      operationId: upload_document_api_v1_projects__project_id__documents_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_upload_document_api_v1_projects__project_id__documents_post'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '409':
+          description: Identical file (SHA-256) already exists in project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '413':
+          description: File empty or exceeds 20 MB
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '415':
+          description: Unsupported MIME type (only application/pdf and text/plain)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Text extraction failed or produced empty text
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '429':
+          description: Rate limit exceeded (60 req/min)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+  /api/v1/projects/{project_id}/analyze:
+    post:
+      tags:
+      - analysis
+      summary: Trigger asynchronous claim extraction, dense retrieval, and NLI verification
+      operationId: start_analysis_api_v1_projects__project_id__analyze_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: sync
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Execute synchronously instead of in background worker (intended
+            for smoke tests/CLI).
+          default: false
+          title: Sync
+        description: Execute synchronously instead of in background worker (intended
+          for smoke tests/CLI).
+      responses:
+        '202':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyzeStartedOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '409':
+          description: No ready documents, extraction still in progress, or analysis
+            already running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '429':
+          description: Rate limit exceeded (60 req/min)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/jobs:
+    get:
+      tags:
+      - analysis
+      summary: Poll recent pipeline jobs and progress percentages for a project
+      operationId: list_jobs_api_v1_projects__project_id__jobs_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobListOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/claims:
+    get:
+      tags:
+      - claims & graph
+      summary: List extracted claims with NLI evidence, filters, search, and pagination
+      operationId: list_claims_api_v1_projects__project_id__claims_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - entailment
+            - contradiction
+            - neutral
+            type: string
+          - type: 'null'
+          description: Filter by effective NLI label
+          title: Label
+        description: Filter by effective NLI label
+      - name: document_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          description: Filter claims/evidence involving a specific document
+          title: Document Id
+        description: Filter claims/evidence involving a specific document
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Case-insensitive substring search across claim text and document
+            title
+          title: Search
+        description: Case-insensitive substring search across claim text and document
+          title
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimsResponseOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/graph:
+    get:
+      tags:
+      - claims & graph
+      summary: Retrieve the interactive evidence map (document, claim, and passage
+        nodes + NLI edges)
+      operationId: get_evidence_graph_api_v1_projects__project_id__graph_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - entailment
+            - contradiction
+            - neutral
+            type: string
+          - type: 'null'
+          title: Label
+      - name: document_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Document Id
+      - name: include_neutral
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Include neutral NLI edges in the graph
+          default: true
+          title: Include Neutral
+        description: Include neutral NLI edges in the graph
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/projects/{project_id}/export:
+    get:
+      tags:
+      - claims & graph
+      summary: Export filtered claims and evidence edges as JSON or CSV (US-08)
+      operationId: export_project_api_v1_projects__project_id__export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: project_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Project Id
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(json|csv)$
+          description: 'Export format: json or csv'
+          default: json
+          title: Format
+        description: 'Export format: json or csv'
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - entailment
+            - contradiction
+            - neutral
+            type: string
+          - type: 'null'
+          title: Label
+      - name: document_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Document Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/evidence/{evidence_id}:
+    patch:
+      tags:
+      - claims & graph
+      summary: Override an NLI edge label while preserving the original model prediction
+        (US-09)
+      operationId: override_label_api_v1_evidence__evidence_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: evidence_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Evidence Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideOut'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '404':
+          description: Evidence edge not found or owned by another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+        '422':
+          description: Invalid label value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOut'
+components:
+  schemas:
+    AnalyzeStartedOut:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Initial execution status (queued or succeeded when sync=true)
+          examples:
+          - queued
+        project_id:
+          type: string
+          title: Project Id
+          description: Target project UUID
+        job_ids:
+          items:
+            type: string
+          type: array
+          title: Job Ids
+          description: Ordered UUIDs for extract_claims, retrieve, and nli jobs
+      type: object
+      required:
+      - status
+      - project_id
+      - job_ids
+      title: AnalyzeStartedOut
+    AuthOut:
+      properties:
+        token:
+          type: string
+          title: Token
+          description: RFC 7519 Bearer JWT access token
+          examples:
+          - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          title: Token Type
+          description: Token scheme
+          default: bearer
+          examples:
+          - bearer
+        expires_in:
+          type: integer
+          title: Expires In
+          description: Token lifetime in seconds
+          examples:
+          - 86400
+        user:
+          $ref: '#/components/schemas/UserOut'
+      type: object
+      required:
+      - token
+      - expires_in
+      - user
+      title: AuthOut
+    Body_upload_document_api_v1_projects__project_id__documents_post:
+      properties:
+        file:
+          type: string
+          contentMediaType: application/octet-stream
+          title: File
+          description: PDF or TXT file (max 20 MB)
+      type: object
+      required:
+      - file
+      title: Body_upload_document_api_v1_projects__project_id__documents_post
+    ClaimOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Claim UUID
+        source_document_id:
+          type: string
+          title: Source Document Id
+          description: Document UUID from which the claim was extracted
+        source_name:
+          type: string
+          title: Source Name
+          description: Filename of the source document
+          examples:
+          - scifact_2020.pdf
+        page_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page No
+          description: 1-based PDF page number
+          examples:
+          - 2
+        char_start:
+          type: integer
+          title: Char Start
+          description: Start offset of exact claim slice
+          examples:
+          - 412
+        char_end:
+          type: integer
+          title: Char End
+          description: Exclusive end offset of exact claim slice
+          examples:
+          - 538
+        text:
+          type: string
+          title: Text
+          description: Verbatim extracted claim sentence
+        confidence:
+          type: number
+          title: Confidence
+          description: Claim-worthiness confidence in [0, 1]
+          examples:
+          - 0.845
+        extractor_name:
+          type: string
+          title: Extractor Name
+          description: Claim extractor identifier
+          examples:
+          - local-hybrid-claim-v1:BAAI/bge-small-en-v1.5
+        has_evidence:
+          type: boolean
+          title: Has Evidence
+          description: True if at least one non-neutral evidence edge exists; False
+            triggers explicit empty-evidence state (US-04b)
+        evidence:
+          items:
+            $ref: '#/components/schemas/EvidenceOut'
+          type: array
+          title: Evidence
+      type: object
+      required:
+      - id
+      - source_document_id
+      - source_name
+      - char_start
+      - char_end
+      - text
+      - confidence
+      - extractor_name
+      - has_evidence
+      - evidence
+      title: ClaimOut
+    ClaimsResponseOut:
+      properties:
+        claims:
+          items:
+            $ref: '#/components/schemas/ClaimOut'
+          type: array
+          title: Claims
+        total:
+          type: integer
+          title: Total
+          description: Total claims matching the active filters
+          examples:
+          - 12
+        limit:
+          type: integer
+          title: Limit
+          description: Page size applied
+          examples:
+          - 50
+        offset:
+          type: integer
+          title: Offset
+          description: Pagination offset applied
+          examples:
+          - 0
+        jobs:
+          items:
+            $ref: '#/components/schemas/JobOut'
+          type: array
+          title: Jobs
+      type: object
+      required:
+      - claims
+      - total
+      - limit
+      - offset
+      - jobs
+      title: ClaimsResponseOut
+    DeleteOut:
+      properties:
+        deleted:
+          type: string
+          title: Deleted
+          description: UUID of the deleted project
+          examples:
+          - a3fc0bc4-b7be-46b2-abf3-273bf7c2737a
+      type: object
+      required:
+      - deleted
+      title: DeleteOut
+    DocumentListOut:
+      properties:
+        documents:
+          items:
+            $ref: '#/components/schemas/DocumentOut'
+          type: array
+          title: Documents
+        total:
+          type: integer
+          title: Total
+          description: Total documents in project
+          examples:
+          - 4
+        limit:
+          type: integer
+          title: Limit
+          description: Page size applied
+          examples:
+          - 50
+        offset:
+          type: integer
+          title: Offset
+          description: Pagination offset applied
+          examples:
+          - 0
+      type: object
+      required:
+      - documents
+      - total
+      - limit
+      - offset
+      title: DocumentListOut
+    DocumentOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Document UUID
+          examples:
+          - 60912035-012f-4d08-8c1e-f7d3b3b42fb2
+        original_name:
+          type: string
+          title: Original Name
+          description: Original filename supplied at upload
+          examples:
+          - scifact_2020.pdf
+        media_type:
+          type: string
+          title: Media Type
+          description: Validated MIME type
+          examples:
+          - application/pdf
+        size_bytes:
+          type: integer
+          title: Size Bytes
+          description: File size in bytes (1..20971520)
+          examples:
+          - 482910
+        status:
+          type: string
+          title: Status
+          description: Pipeline extraction status (queued|processing|ready|failed)
+          examples:
+          - ready
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+          description: Human-readable error reason when status=failed
+        page_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page Count
+          description: PDF page count (null for plain text)
+          examples:
+          - 11
+        created_at:
+          type: string
+          title: Created At
+          description: ISO-8601 UTC upload timestamp
+          examples:
+          - '2026-11-23T10:16:00+00:00'
+      type: object
+      required:
+      - id
+      - original_name
+      - media_type
+      - size_bytes
+      - status
+      - created_at
+      title: DocumentOut
+    ErrorOut:
+      properties:
+        code:
+          type: string
+          title: Code
+          description: Machine-readable error code
+          examples:
+          - not_found
+        message:
+          type: string
+          title: Message
+          description: Human-readable error explanation
+          examples:
+          - Project not found
+        request_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Request Id
+          description: Correlation ID echoed in X-Request-ID for tracing
+          examples:
+          - f47ac10b-58cc-4372-a567-0e02b2c3d479
+      type: object
+      required:
+      - code
+      - message
+      title: ErrorOut
+    EvidenceOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Evidence edge UUID
+        passage_id:
+          type: string
+          title: Passage Id
+          description: Source passage UUID
+        document_id:
+          type: string
+          title: Document Id
+          description: Document UUID containing the passage
+        document_name:
+          type: string
+          title: Document Name
+          description: Filename of the evidence document
+          examples:
+          - scinli_2022.pdf
+        page_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page No
+          description: 1-based page number for PDFs
+          examples:
+          - 4
+        char_start:
+          type: integer
+          title: Char Start
+          description: Start character offset in extracted_text
+          examples:
+          - 1204
+        char_end:
+          type: integer
+          title: Char End
+          description: Exclusive end character offset
+          examples:
+          - 1480
+        passage_text:
+          type: string
+          title: Passage Text
+          description: Verbatim excerpt from the source document
+        model_name:
+          type: string
+          title: Model Name
+          description: NLI model identifier
+          examples:
+          - cross-encoder/nli-deberta-v3-xsmall
+        model_label:
+          type: string
+          enum:
+          - entailment
+          - contradiction
+          - neutral
+          title: Model Label
+          description: Original model prediction
+          examples:
+          - contradiction
+        model_score:
+          type: number
+          title: Model Score
+          description: Calibrated confidence score in [0, 1]
+          examples:
+          - 0.812
+        user_label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: User Label
+          description: Optional researcher override (US-09)
+        effective_label:
+          type: string
+          enum:
+          - entailment
+          - contradiction
+          - neutral
+          title: Effective Label
+          description: user_label if set, otherwise model_label
+          examples:
+          - contradiction
+      type: object
+      required:
+      - id
+      - passage_id
+      - document_id
+      - document_name
+      - char_start
+      - char_end
+      - passage_text
+      - model_name
+      - model_label
+      - model_score
+      - effective_label
+      title: EvidenceOut
+    GraphEdgeOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Graph edge identifier
+        source:
+          type: string
+          title: Source
+          description: Source node ID
+        target:
+          type: string
+          title: Target
+          description: Target node ID
+        kind:
+          type: string
+          enum:
+          - extracted_from
+          - evidence
+          title: Kind
+          description: Edge semantics
+        label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: Label
+          description: Effective NLI label for evidence edges
+        model_label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: Model Label
+        user_label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: User Label
+        score:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Score
+      type: object
+      required:
+      - id
+      - source
+      - target
+      - kind
+      title: GraphEdgeOut
+    GraphNodeOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Typed graph node ID (doc:<uuid>, claim:<uuid>, passage:<uuid>)
+        type:
+          type: string
+          enum:
+          - document
+          - claim
+          - passage
+          title: Type
+          description: Graph node category
+        label:
+          type: string
+          title: Label
+          description: Display label or snippet
+        document_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Document Id
+        page_no:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Page No
+        has_evidence:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Has Evidence
+        confidence:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Confidence
+      type: object
+      required:
+      - id
+      - type
+      - label
+      title: GraphNodeOut
+    GraphOut:
+      properties:
+        project_id:
+          type: string
+          title: Project Id
+        nodes:
+          items:
+            $ref: '#/components/schemas/GraphNodeOut'
+          type: array
+          title: Nodes
+        edges:
+          items:
+            $ref: '#/components/schemas/GraphEdgeOut'
+          type: array
+          title: Edges
+      type: object
+      required:
+      - project_id
+      - nodes
+      - edges
+      title: GraphOut
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    HealthOut:
+      properties:
+        status:
+          type: string
+          title: Status
+          description: Service health indicator
+          examples:
+          - ok
+        version:
+          type: string
+          title: Version
+          description: API semantic version
+          examples:
+          - 1.0.0
+        ml_backend:
+          type: string
+          title: Ml Backend
+          description: Active ML execution backend
+          examples:
+          - transformers
+        embedding_model:
+          type: string
+          title: Embedding Model
+          description: Dense retrieval model ID
+          examples:
+          - BAAI/bge-small-en-v1.5
+        nli_model:
+          type: string
+          title: Nli Model
+          description: NLI cross-encoder model ID
+          examples:
+          - cross-encoder/nli-deberta-v3-xsmall
+      type: object
+      required:
+      - status
+      - version
+      - ml_backend
+      - embedding_model
+      - nli_model
+      title: HealthOut
+    JobListOut:
+      properties:
+        jobs:
+          items:
+            $ref: '#/components/schemas/JobOut'
+          type: array
+          title: Jobs
+      type: object
+      required:
+      - jobs
+      title: JobListOut
+    JobOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Analysis job UUID
+        kind:
+          type: string
+          title: Kind
+          description: Pipeline stage (extract_text|extract_claims|retrieve|nli)
+          examples:
+          - nli
+        status:
+          type: string
+          title: Status
+          description: Execution status (queued|running|succeeded|failed)
+          examples:
+          - succeeded
+        progress_pct:
+          type: integer
+          title: Progress Pct
+          description: Completion percentage 0..100
+          examples:
+          - 100
+        error_message:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Error Message
+          description: Failure diagnostic when status=failed
+        created_at:
+          type: string
+          title: Created At
+          description: ISO-8601 UTC enqueue timestamp
+        started_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Started At
+          description: ISO-8601 UTC worker start timestamp
+        finished_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Finished At
+          description: ISO-8601 UTC worker finish timestamp
+      type: object
+      required:
+      - id
+      - kind
+      - status
+      - progress_pct
+      - created_at
+      title: JobOut
+    LoginIn:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+          description: Registered account email
+          examples:
+          - researcher@ehu.lt
+        password:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Password
+          description: Account password
+          examples:
+          - StrongPass123!
+      type: object
+      required:
+      - email
+      - password
+      title: LoginIn
+    OverrideIn:
+      properties:
+        user_label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: User Label
+          description: Human override label, or null to restore the model label
+          examples:
+          - contradiction
+      type: object
+      required:
+      - user_label
+      title: OverrideIn
+    OverrideOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Evidence edge UUID
+        user_label:
+          anyOf:
+          - type: string
+            enum:
+            - entailment
+            - contradiction
+            - neutral
+          - type: 'null'
+          title: User Label
+          description: Updated override label
+      type: object
+      required:
+      - id
+      - user_label
+      title: OverrideOut
+    ProjectIn:
+      properties:
+        name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Name
+          description: Unique project name per owner
+          examples:
+          - Scientific NLI Literature Review
+      type: object
+      required:
+      - name
+      title: ProjectIn
+    ProjectListOut:
+      properties:
+        projects:
+          items:
+            $ref: '#/components/schemas/ProjectOut'
+          type: array
+          title: Projects
+        total:
+          type: integer
+          title: Total
+          description: Total matching projects owned by the user
+          examples:
+          - 2
+        limit:
+          type: integer
+          title: Limit
+          description: Page size applied
+          examples:
+          - 50
+        offset:
+          type: integer
+          title: Offset
+          description: Pagination offset applied
+          examples:
+          - 0
+      type: object
+      required:
+      - projects
+      - total
+      - limit
+      - offset
+      title: ProjectListOut
+    ProjectOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: Project UUID
+          examples:
+          - a3fc0bc4-b7be-46b2-abf3-273bf7c2737a
+        name:
+          type: string
+          title: Name
+          description: Project name
+          examples:
+          - Scientific NLI Literature Review
+        document_count:
+          type: integer
+          title: Document Count
+          description: Number of uploaded documents in the project
+          default: 0
+          examples:
+          - 4
+        claim_count:
+          type: integer
+          title: Claim Count
+          description: Number of extracted claims in the project
+          default: 0
+          examples:
+          - 28
+        created_at:
+          type: string
+          title: Created At
+          description: ISO-8601 UTC creation timestamp
+          examples:
+          - '2026-11-23T10:15:00+00:00'
+      type: object
+      required:
+      - id
+      - name
+      - created_at
+      title: ProjectOut
+    RegisterIn:
+      properties:
+        email:
+          type: string
+          format: email
+          title: Email
+          description: Unique lowercase researcher email
+          examples:
+          - researcher@ehu.lt
+        password:
+          type: string
+          maxLength: 200
+          minLength: 8
+          title: Password
+          description: Account password (hashed with Argon2id)
+          examples:
+          - StrongPass123!
+        display_name:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Display Name
+          description: Name displayed in the workspace UI
+          examples:
+          - Bahdan Kanoplich
+      type: object
+      required:
+      - email
+      - password
+      - display_name
+      title: RegisterIn
+    UserOut:
+      properties:
+        id:
+          type: string
+          title: Id
+          description: UUID of the researcher account
+          examples:
+          - 3fa85f64-5717-4562-b3fc-2c963f66afa6
+        email:
+          type: string
+          title: Email
+          description: Normalized lowercase email
+          examples:
+          - researcher@ehu.lt
+        display_name:
+          type: string
+          title: Display Name
+          description: Display name
+          examples:
+          - Bahdan Kanoplich
+      type: object
+      required:
+      - id
+      - email
+      - display_name
+      title: UserOut
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+  securitySchemes:
+    HTTPBearer:
+      type: http
+      description: RFC 7519 Bearer JWT obtained from /api/v1/auth/login or /register
+      scheme: bearer
+tags:
+- name: system
+  description: Service health check and Prometheus observability metrics.
+- name: auth
+  description: Researcher registration, Argon2id + RFC 7519 JWT authentication, and
+    profile.
+- name: projects
+  description: Project workspace lifecycle and GDPR cascading erasure (US-01, US-11).
+- name: documents
+  description: Scientific PDF/TXT upload, SHA-256 deduplication, and text extraction
+    (US-02).
+- name: analysis
+  description: Asynchronous ML pipeline trigger and per-stage progress polling (US-03,
+    US-04).
+- name: claims & graph
+  description: Extracted claims, NLI evidence map, human label overrides, and JSON/CSV
+    export (US-05, US-08, US-09).
+servers:
+- url: http://127.0.0.1:8000
+  description: Local development server
+- url: https://api.factmap-scholar.example.com
+  description: Production / cloud demo host

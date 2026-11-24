@@ -1,0 +1,3 @@
+Dense retrieval does not find candidate passages before classification.
+The model treats an evidence span as the premise and a claim as the hypothesis.
+This note contradicts the claim that dense retrieval finds candidate passages before a classifier decides support.
