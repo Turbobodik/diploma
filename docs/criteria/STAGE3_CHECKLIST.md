@@ -20,17 +20,17 @@
 - [ ] Runnable Postman collection + curl walkthrough script
 
 ## Track 3: Front-End (`frontend/` & `docs/frontend/`)
-- [ ] React + TypeScript (strict, zero `any`) + Vite SPA
-- [ ] Modular architecture: `components`, `pages`, `features`, `services`, `models`, `store`, `hooks`, `styles`
-- [ ] 5 routes with `React.lazy` + `Suspense` (`/login`, `/projects`, `/projects/:projectId`, `/settings`, `/design-system`)
-- [ ] Redux Toolkit slices (`auth`, `projects`, `workspace`, `ui`) + memoized selectors + async thunk chains
-- [ ] Centralized API service with interceptors (`401/403/404/429/500`), React ErrorBoundary, Toasts, Skeletons
-- [ ] Forms with validation, tables/lists, filtering/search/sorting
-- [ ] Interactive Evidence Map (zoom/pan, NLI color-coded edges, filters, detail panel, explicit empty state, override, JSON/CSV export)
-- [ ] Light/Dark theme + Display scale + WCAG 2.1 AA (ARIA, keyboard nav, >=4.5:1 contrast)
-- [ ] ESLint + Prettier passing
-- [ ] Unit tests (>=4 components/services/slices) + Integration tests (>=2 flows) with Vitest + Testing Library
-- [ ] Front-End Architecture documentation (`docs/frontend/ARCHITECTURE.md`)
+- [x] React + TypeScript (strict, zero `any`) + Vite SPA
+- [x] Modular architecture: `components`, `pages`, `features`, `services`, `models`, `store`, `hooks`, `styles`
+- [x] 5 routes with `React.lazy` + `Suspense` (`/login`, `/projects`, `/projects/:projectId`, `/settings`, `/design-system`)
+- [x] Redux Toolkit slices (`auth`, `projects`, `workspace`, `ui`) + memoized selectors + async thunk chains
+- [x] Centralized API service with interceptors (`401/403/404/429/500`), React ErrorBoundary, Toasts, Skeletons
+- [x] Forms with validation, tables/lists, filtering/search/sorting
+- [x] Interactive Evidence Map (zoom/pan, NLI color-coded edges, filters, detail panel, explicit empty state, override, JSON/CSV export)
+- [x] Light/Dark theme + Display scale + WCAG 2.1 AA (ARIA, keyboard nav, >=4.5:1 contrast)
+- [x] ESLint + Prettier passing
+- [x] Unit tests (6 suites / 16 tests with Vitest + Testing Library) + E2E tests (2 Playwright Chromium specs)
+- [x] Front-End Architecture documentation (`docs/frontend/ARCHITECTURE.md`)
 
 ## Track 4: Adaptive UI (`frontend/` & `docs/adaptive-ui/`)
 - [ ] Responsive across Mobile (375px), Tablet (768px), Desktop (1440px), Ultrawide/4K & foldable

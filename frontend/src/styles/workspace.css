@@ -1,0 +1,309 @@
+/* Auth Page */
+.auth-page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  background: var(--bg-canvas);
+}
+
+.auth-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: clamp(2rem, 5vw, 4.5rem);
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.auth-hero-copy {
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.auth-feature-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.auth-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.auth-form-column {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.auth-card {
+  width: min(27rem, 100%);
+}
+
+/* Projects Toolbar */
+.toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.toolbar-search {
+  flex: 1 1 16rem;
+}
+
+/* Mobile Project Cards */
+.mobile-card-list {
+  display: none;
+}
+
+/* Workspace Layout */
+.workspace-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+/* Document Dropzone */
+.dropzone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.dropzone.is-dragging {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-soft);
+}
+
+/* Pipeline Steps */
+.pipeline-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.pipeline-step {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.progress-track {
+  width: 100%;
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent-primary);
+  transition: width var(--duration-base) var(--ease-standard);
+}
+
+/* Interactive Evidence Map */
+.graph-container {
+  position: relative;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-subtle);
+}
+
+.graph-viewport {
+  width: 100%;
+  height: clamp(22rem, 48vh, 34rem);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background: var(--bg-surface);
+}
+
+.graph-viewport:active {
+  cursor: grabbing;
+}
+
+.graph-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node rect {
+  transition:
+    stroke-width var(--duration-fast) var(--ease-standard),
+    fill var(--duration-fast) var(--ease-standard);
+}
+
+.graph-node:hover rect {
+  stroke-width: 2.5;
+}
+
+.graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+
+.legend-swatch.entailment {
+  background: var(--nli-entailment);
+}
+
+.legend-swatch.contradiction {
+  background: var(--nli-contradiction);
+}
+
+.legend-swatch.neutral {
+  background: var(--nli-neutral);
+}
+
+/* Claim Detail Panel */
+.claim-quote {
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  line-height: 1.5;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--accent-primary);
+  background: var(--bg-subtle);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}
+
+.evidence-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.evidence-excerpt {
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.claim-row-selected {
+  background: var(--accent-primary-soft) !important;
+}
+
+/* Metrics / Device Info */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.metric-box {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.metric-label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.metric-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+@media (max-width: 1023px) {
+  .auth-page {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-hero {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--space-6) var(--space-4);
+  }
+
+  .workspace-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .desktop-table-only {
+    display: none;
+  }
+
+  .mobile-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+}
