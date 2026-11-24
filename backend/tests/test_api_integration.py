@@ -1,6 +1,10 @@
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+from openapi_spec_validator import validate
+from sqlalchemy.orm import sessionmaker
+
 from app.core import config as config_mod
 from app.core.cache import project_cache
 from app.core.rate_limit import rate_limiter
@@ -8,9 +12,6 @@ from app.db import Base, build_engine, get_db
 from app.main import create_app
 from app.ml import pipeline as pipeline_mod
 from app.services import analysis_service as analysis_mod
-from fastapi.testclient import TestClient
-from openapi_spec_validator import validate
-from sqlalchemy.orm import sessionmaker
 
 
 @pytest.fixture()

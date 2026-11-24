@@ -37,12 +37,24 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expi
 
 
 def init_db_if_sqlite(target_engine: Engine | None = None) -> None:
-    """Create tables automatically for local SQLite dev/test; Postgres uses ddl/001_init.sql."""
+    """Create tables automatically for SQLite or bootstrap empty managed Postgres via ddl/001_init.sql."""
+    from pathlib import Path
+
+    from sqlalchemy import inspect
+
     eng = target_engine or engine
     if str(eng.url).startswith("sqlite"):
         import app.models.orm  # noqa: F401
 
         Base.metadata.create_all(bind=eng)
+        return
+
+    if not inspect(eng).has_table("app_user"):
+        ddl_path = Path(__file__).resolve().parents[1] / "ddl" / "001_init.sql"
+        if ddl_path.exists():
+            raw_sql = ddl_path.read_text(encoding="utf-8")
+            with eng.begin() as conn:
+                conn.exec_driver_sql(raw_sql)
 
 
 def get_db() -> Generator[Session, None, None]:

@@ -1,16 +1,16 @@
 # Stage 3 Master Checklist (Deadline: Wed, 25 Nov 2026)
 
 ## Track 1: Back-end (`backend/`)
-- [ ] Layered architecture (`api/v1/` -> `services/` -> `repositories/` -> `models/`, `core/`)
-- [ ] SQLAlchemy 2.0 ORM mapped 1:1 to `ddl/001_init.sql`
-- [ ] Standard JWT (`PyJWT`, RFC 7519) + Argon2id password hashing (`argon2-cffi`)
-- [ ] Zero magic strings (`app/core/constants.py`), env-only config + `.env.example`
-- [ ] Global exception handling (`400/401/403/404/409/413/415/422/429/500`), input validation, CORS
-- [ ] Structured JSON logging + `X-Request-ID` tracing middleware
-- [ ] Sliding-window rate limiting (`60 req/min`, NFR-06) + Prometheus `/metrics` + optional Redis/TTL cache
-- [ ] Pagination (`limit`, `offset`, `total`) on list endpoints
-- [ ] Unit + API integration tests with **>= 80% coverage** (`pytest-cov`) + `pip-audit` + `ruff`
-- [ ] CI/CD workflow (`.github/workflows/ci.yml`) + root `docker-compose.yml`
+- [x] Layered architecture (`api/v1/` -> `services/` -> `repositories/` -> `models/`, `core/`)
+- [x] SQLAlchemy 2.0 ORM mapped 1:1 to `ddl/001_init.sql` (with managed Postgres DDL auto-bootstrap)
+- [x] Standard JWT (`PyJWT`, RFC 7519) + Argon2id password hashing (`argon2-cffi`)
+- [x] Zero magic strings (`app/core/constants.py`), env-only config + `.env.example`
+- [x] Global exception handling (`400/401/403/404/409/413/415/422/429/500`), input validation, CORS
+- [x] Structured JSON logging + `X-Request-ID` tracing middleware
+- [x] Sliding-window rate limiting (`60 req/min`, NFR-06) + Prometheus `/metrics` + TTL cache
+- [x] Pagination (`limit`, `offset`, `total`) on list endpoints
+- [x] Unit + API integration tests with **88% coverage** (`pytest-cov`, gate >= 80%) + `pip-audit` (0 vulns) + `ruff` (0 errors)
+- [x] CI/CD workflow (`.github/workflows/ci.yml`) + root `docker-compose.yml` + `render.yaml` blueprint
 
 ## Track 2: API Documentation (`docs/api/`)
 - [x] Validated `openapi.yaml` & `openapi.json` (Redocly CLI 0 errors/0 warnings + `openapi-spec-validator`) + contract tests

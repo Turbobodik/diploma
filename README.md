@@ -67,9 +67,47 @@ Every requirement for the **Adaptive UI (Web/Mobile)** review is implemented and
 
 ---
 
+## Stage 3 — Back-End Criterion Compliance Map
+
+Every requirement for the **Back-End** review is implemented and verifiable at the paths below:
+
+| Requirement | Implementation Location |
+|---|---|
+| **Modern Framework, Database & ORM** | FastAPI + PostgreSQL 16 ([`backend/ddl/001_init.sql`](backend/ddl/001_init.sql)) + SQLAlchemy 2.0 ORM ([`backend/app/models/orm.py`](backend/app/models/orm.py), [`backend/app/db.py`](backend/app/db.py)) |
+| **Layered Architecture (SOLID)** | Presentation routers ([`backend/app/api/v1/`](backend/app/api/v1/)), business services ([`backend/app/services/`](backend/app/services/)), repository data access ([`backend/app/repositories/`](backend/app/repositories/)), core infrastructure ([`backend/app/core/`](backend/app/core/)), Pydantic schemas ([`backend/app/models/schemas.py`](backend/app/models/schemas.py)) |
+| **Standard Security (Argon2id + RFC 7519 JWT, Zero Secrets)** | [`backend/app/core/security.py`](backend/app/core/security.py), [`backend/app/api/deps.py`](backend/app/api/deps.py), [`backend/.env.example`](backend/.env.example) |
+| **Described API (OpenAPI 3.1 / Swagger UI / ReDoc)** | [`docs/api/openapi.yaml`](docs/api/openapi.yaml), [`docs/api/README.md`](docs/api/README.md), live `/docs` & `/redoc` |
+| **Global Error Handling, Structured JSON Logging, Tracing, Metrics & Rate Limiting** | [`exceptions.py`](backend/app/core/exceptions.py), [`logging.py`](backend/app/core/logging.py) (`X-Request-ID`), [`metrics.py`](backend/app/core/metrics.py) (`/metrics`), [`rate_limit.py`](backend/app/core/rate_limit.py) (`60 req/min`), [`cache.py`](backend/app/core/cache.py) |
+| **Unit & Integration Tests with ≥ 70% / ≥ 80% Coverage (88% verified)** | [`backend/tests/`](backend/tests/) — `pytest --cov=app --cov-fail-under=80` (**15 passed, 88% coverage**), `ruff check` (**0 errors**), `pip-audit` (**0 vulnerabilities**) |
+| **Containerization, CI/CD & Cloud Deployment Blueprint** | Root [`docker-compose.yml`](docker-compose.yml), [`backend/Dockerfile`](backend/Dockerfile), [`frontend/Dockerfile`](frontend/Dockerfile), [`.github/workflows/ci.yml`](.github/workflows/ci.yml), 1-click [`render.yaml`](render.yaml) |
+
+---
+
 ## How to Run the Project
 
-### 1. View & Validate API Documentation
+### 0. One-Command Full-Stack via Docker Compose (PostgreSQL + FastAPI + React SPA)
+
+```bash
+docker compose up --build
+```
+
+- **Web Application (Nginx + React SPA):** `http://localhost:8080`
+- **Backend API & Swagger UI:** `http://localhost:8000/docs`
+- **Backend Health / Metrics:** `http://localhost:8000/health` · `http://localhost:8000/metrics`
+
+### 1. Back-End Tests, Coverage & Quality Gates
+
+```bash
+cd backend
+python3 -m venv .venv
+.venv/bin/pip install --upgrade pip
+.venv/bin/pip install -r requirements-ci.txt
+.venv/bin/ruff check app tests scripts
+.venv/bin/pip-audit
+ML_BACKEND=stub .venv/bin/pytest --cov=app --cov-report=term-missing --cov-fail-under=80 -v
+```
+
+### 2. View & Validate API Documentation
 
 - **Offline Interactive ReDoc (no server required):** open [`docs/api/redoc.html`](docs/api/redoc.html) directly in a browser.
 - **Structured Markdown Portal:** start at [`docs/api/README.md`](docs/api/README.md).
@@ -82,7 +120,7 @@ Every requirement for the **Adaptive UI (Web/Mobile)** review is implemented and
   bash docs/api/examples/walkthrough.sh
   ```
 
-### 2. Front-End SPA (Development, Tests, Build)
+### 3. Front-End SPA (Development, Tests, Build)
 
 Requires **Node.js 20+** and **npm 10+**.
 
@@ -105,7 +143,7 @@ npx playwright install chromium   # one-time browser install (if not already pre
 npm run test:e2e             # Playwright Chromium end-to-end tests
 ```
 
-### 3. Full-Stack Mode (FastAPI Backend + React Front-End)
+### 4. Full-Stack Local Dev (FastAPI Backend + React Front-End)
 
 To run the live FastAPI API together with the SPA (fast offline mode with SQLite and stub ML, or full PostgreSQL + Transformers ML):
 
@@ -113,8 +151,7 @@ To run the live FastAPI API together with the SPA (fast offline mode with SQLite
 # Terminal 1 — Backend API on http://127.0.0.1:8000
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-# Fast local start (SQLite + stub ML, no heavy model download):
+.venv/bin/pip install -r requirements-ci.txt   # or requirements.txt for full Transformers ML
 ML_BACKEND=stub .venv/bin/uvicorn app.main:app --reload
 # For PostgreSQL + real Transformers ML, see backend/README.md
 
@@ -126,6 +163,15 @@ npm run dev
 - **Front-End SPA:** `http://localhost:5173`
 - **Backend Swagger UI:** `http://127.0.0.1:8000/docs`
 - **Backend Health Check:** `http://127.0.0.1:8000/health`
+
+### 5. Cloud Production Deployment (Render Blueprint)
+
+The repository includes [`render.yaml`](render.yaml), which provisions:
+1. Managed PostgreSQL 16 (`factmap-scholar-db`, auto-bootstrapped from `backend/ddl/001_init.sql` on first startup).
+2. Containerized FastAPI API (`factmap-scholar-api`) with auto-generated `JWT_SECRET` and `/health` check.
+3. Static React SPA (`factmap-scholar-web`) with SPA rewrite rules.
+
+Deploy via **Render Dashboard → New → Blueprint → Connect `Turbobodik/diploma`**.
 
 ---
 

@@ -5,10 +5,10 @@ Usage:
 """
 
 import json
-from pathlib import Path
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 BASE = "http://127.0.0.1:8000"
 ROOT = Path(__file__).resolve().parents[1]
