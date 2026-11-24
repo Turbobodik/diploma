@@ -1,0 +1,253 @@
+{
+  "info": {
+    "_postman_id": "a7b4f180-9e3c-4d21-b811-7a9942c6e100",
+    "name": "FactMap Scholar API v1.0.0",
+    "description": "End-to-end Postman v2.1 collection for the FactMap Scholar scientific claim verification API (/api/v1). Run requests top-to-bottom: Register/Login automatically captures {{token}}, Create Project captures {{projectId}}, and List Claims captures {{evidenceId}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "projectId", "value": "" },
+    { "key": "evidenceId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{baseUrl}}/metrics"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Researcher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const data = pm.response.json();",
+                  "  pm.collectionVariables.set('token', data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman.demo@ehu.lt\",\n  \"password\": \"StrongDemoPass123!\",\n  \"display_name\": \"Postman Demo Researcher\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/register"
+          }
+        },
+        {
+          "name": "Login Researcher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login succeeded', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('token', data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"postman.demo@ehu.lt\",\n  \"password\": \"StrongDemoPass123!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Current User Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects",
+      "item": [
+        {
+          "name": "Create Project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Project created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('projectId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"SciFact API Review Study\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/projects"
+          }
+        },
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Delete Project (Cascade)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents & Analysis",
+      "item": [
+        {
+          "name": "Upload Document (PDF or TXT)",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "backend/scripts/sample_a.txt"
+                }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/documents"
+          }
+        },
+        {
+          "name": "List Project Documents",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/documents?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Trigger Analysis Pipeline",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/analyze"
+          }
+        },
+        {
+          "name": "Poll Analysis Jobs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/jobs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Claims, Graph & Export",
+      "item": [
+        {
+          "name": "List Filtered Claims",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.claims && body.claims.length && body.claims[0].evidence.length) {",
+                  "  pm.collectionVariables.set('evidenceId', body.claims[0].evidence[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/claims?limit=50&offset=0"
+          }
+        },
+        {
+          "name": "Get Evidence Graph",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/graph?include_neutral=true"
+          }
+        },
+        {
+          "name": "Override Evidence NLI Label",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_label\": \"contradiction\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/evidence/{{evidenceId}}"
+          }
+        },
+        {
+          "name": "Export Project JSON",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/export?format=json"
+          }
+        },
+        {
+          "name": "Export Project CSV",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/projects/{{projectId}}/export?format=csv"
+          }
+        }
+      ]
+    }
+  ]
+}

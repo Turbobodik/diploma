@@ -29,9 +29,44 @@ Every requirement for the **Front-End Architecture and Development** review is i
 
 ---
 
+## Stage 3 — API Documentation Criterion Compliance Map
+
+Every requirement for the **API Documentation** review is implemented and verifiable at the paths below:
+
+| Requirement | Implementation Location |
+|---|---|
+| **Validated OpenAPI 3.1.0 Specification (YAML & JSON)** | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) & [`docs/api/openapi.json`](docs/api/openapi.json) — validated with Redocly CLI (**0 errors, 0 warnings**) & `openapi-spec-validator` ([`backend/scripts/export_openapi.py`](backend/scripts/export_openapi.py)) |
+| **Documentation Portal, Strategy, Versioning & Changelog** | [`docs/api/README.md`](docs/api/README.md) (TOC, tooling, naming conventions, versioning policy, known limitations, changelog) |
+| **Complete Endpoint Reference (all 16 endpoints, requests/responses/codes)** | [`docs/api/reference/endpoints.md`](docs/api/reference/endpoints.md) |
+| **Error Taxonomy & Recovery Guide (`ErrorOut` + 16 `ErrorCode` values)** | [`docs/api/reference/errors.md`](docs/api/reference/errors.md) |
+| **Data Models & Enum Schemas** | [`docs/api/schemas/models.md`](docs/api/schemas/models.md) |
+| **Getting Started Guide** | [`docs/api/guides/getting-started.md`](docs/api/guides/getting-started.md) |
+| **Authentication & Security Deep Dive (Argon2id + RFC 7519 JWT)** | [`docs/api/guides/authentication.md`](docs/api/guides/authentication.md) |
+| **Step-by-Step Integration Tutorial** | [`docs/api/guides/integration-tutorial.md`](docs/api/guides/integration-tutorial.md) |
+| **Advanced Topics (Async Polling, Pagination, Rate Limits, Tracing, Idempotency)** | [`docs/api/guides/advanced-topics.md`](docs/api/guides/advanced-topics.md) |
+| **API Architecture & Sequence Diagrams** | [`docs/api/guides/architecture.md`](docs/api/guides/architecture.md) |
+| **Developer-Accessible Interactive Publishing** | Offline static ReDoc bundle [`docs/api/redoc.html`](docs/api/redoc.html) + live Swagger UI (`/docs`, with `HTTPBearer` Authorize) + live ReDoc (`/redoc`) |
+| **Runnable Examples (Postman & cURL)** | [`docs/api/examples/factmap_scholar.postman_collection.json`](docs/api/examples/factmap_scholar.postman_collection.json) & [`docs/api/examples/walkthrough.sh`](docs/api/examples/walkthrough.sh) |
+| **Contract & Schema Verification Tests** | [`backend/tests/test_api_schema.py`](backend/tests/test_api_schema.py) & [`backend/tests/test_api_integration.py`](backend/tests/test_api_integration.py) |
+
+---
+
 ## How to Run the Project
 
-### 1. Front-End SPA (Development, Tests, Build)
+### 1. View & Validate API Documentation
+
+- **Offline Interactive ReDoc (no server required):** open [`docs/api/redoc.html`](docs/api/redoc.html) directly in a browser.
+- **Structured Markdown Portal:** start at [`docs/api/README.md`](docs/api/README.md).
+- **Validate OpenAPI 3.1.0 Spec:**
+  ```bash
+  npx -y @redocly/cli@latest lint docs/api/openapi.yaml
+  ```
+- **Run End-to-End cURL Walkthrough** (while backend is running on `:8000`):
+  ```bash
+  bash docs/api/examples/walkthrough.sh
+  ```
+
+### 2. Front-End SPA (Development, Tests, Build)
 
 Requires **Node.js 20+** and **npm 10+**.
 
@@ -54,7 +89,7 @@ npx playwright install chromium   # one-time browser install (if not already pre
 npm run test:e2e             # Playwright Chromium end-to-end tests
 ```
 
-### 2. Full-Stack Mode (FastAPI Backend + React Front-End)
+### 3. Full-Stack Mode (FastAPI Backend + React Front-End)
 
 To run the live FastAPI API together with the SPA (fast offline mode with SQLite and stub ML, or full PostgreSQL + Transformers ML):
 

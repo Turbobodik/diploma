@@ -9,7 +9,8 @@
       "email": "20230498@student.ehu.lt"
     },
     "license": {
-      "name": "MIT License"
+      "name": "MIT License",
+      "identifier": "MIT"
     },
     "version": "1.0.0"
   },
@@ -31,8 +32,29 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
-        }
+        },
+        "security": []
       }
     },
     "/metrics": {
@@ -44,14 +66,28 @@
         "operationId": "metrics_metrics_get",
         "responses": {
           "200": {
-            "description": "Successful Response",
+            "description": "Prometheus text exposition format metrics",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "# HELP factmap_http_requests_total Total HTTP requests\n"
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed request",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
               }
             }
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/auth/register": {
@@ -102,7 +138,8 @@
               }
             }
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/auth/login": {
@@ -153,7 +190,8 @@
               }
             }
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/auth/me": {
@@ -679,22 +717,22 @@
               }
             }
           },
-          "429": {
-            "description": "Rate limit exceeded (60 req/min)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (60 req/min)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -2527,8 +2565,14 @@
       "description": "Local development server"
     },
     {
-      "url": "https://api.factmap-scholar.example.com",
-      "description": "Production / cloud demo host"
+      "url": "https://{host}",
+      "description": "Deployed cloud host",
+      "variables": {
+        "host": {
+          "default": "api.factmap-scholar.org",
+          "description": "API hostname"
+        }
+      }
     }
   ]
 }

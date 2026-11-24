@@ -45,7 +45,7 @@ def create_app() -> FastAPI:
             "queryable evidence graph."
         ),
         contact={"name": "Bahdan Kanoplich", "email": "20230498@student.ehu.lt"},
-        license_info={"name": "MIT License"},
+        license_info={"name": "MIT License", "identifier": "MIT"},
         openapi_tags=OPENAPI_TAGS,
         lifespan=_lifespan,
     )

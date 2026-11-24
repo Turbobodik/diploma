@@ -19,7 +19,11 @@ def main() -> None:
     spec = app.openapi()
     spec["servers"] = [
         {"url": "http://127.0.0.1:8000", "description": "Local development server"},
-        {"url": "https://api.factmap-scholar.example.com", "description": "Production / cloud demo host"},
+        {
+            "url": "https://{host}",
+            "description": "Deployed cloud host",
+            "variables": {"host": {"default": "api.factmap-scholar.org", "description": "API hostname"}},
+        },
     ]
     validate(spec)
 

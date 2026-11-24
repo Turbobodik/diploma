@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
     response_model=AuthOut,
     status_code=201,
     summary="Register a researcher account",
+    openapi_extra={"security": []},
     responses={
         409: {"model": ErrorOut, "description": "Email is already registered"},
         422: {"model": ErrorOut, "description": "Invalid email or password shorter than 8 characters"},
@@ -28,6 +29,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)) -> AuthOut:
     "/login",
     response_model=AuthOut,
     summary="Authenticate with email and password",
+    openapi_extra={"security": []},
     responses={
         401: {"model": ErrorOut, "description": "Invalid email or password"},
     },

@@ -13,11 +13,11 @@
 - [ ] CI/CD workflow (`.github/workflows/ci.yml`) + root `docker-compose.yml`
 
 ## Track 2: API Documentation (`docs/api/`)
-- [ ] Validated `openapi.yaml` & `openapi.json` (`openapi-spec-validator`) + contract tests
-- [ ] Interactive Swagger UI (`/docs`) with `HTTPBearer` Authorize + ReDoc (`/redoc`) + static `docs/api/redoc.html`
-- [ ] Folder structure: `/guides`, `/reference`, `/schemas`, `/examples` + `README.md` (TOC, Strategy, Versioning, Changelog)
-- [ ] Guides: Getting Started, Authentication Deep Dive, Integration Tutorial, Advanced Topics, Architecture Diagrams
-- [ ] Runnable Postman collection + curl walkthrough script
+- [x] Validated `openapi.yaml` & `openapi.json` (Redocly CLI 0 errors/0 warnings + `openapi-spec-validator`) + contract tests
+- [x] Interactive Swagger UI (`/docs`) with `HTTPBearer` Authorize + ReDoc (`/redoc`) + static `docs/api/redoc.html`
+- [x] Folder structure: `/guides`, `/reference`, `/schemas`, `/examples` + `README.md` (TOC, Strategy, Versioning, Changelog)
+- [x] Guides: Getting Started, Authentication Deep Dive, Integration Tutorial, Advanced Topics, Architecture Diagrams
+- [x] Runnable Postman collection + curl walkthrough script
 
 ## Track 3: Front-End (`frontend/` & `docs/frontend/`)
 - [x] React + TypeScript (strict, zero `any`) + Vite SPA
