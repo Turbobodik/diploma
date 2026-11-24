@@ -1,0 +1,137 @@
+:root {
+  /* Typography */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Fluid sizing & scale */
+  --base-font-size: 16px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
+  /* Radii */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-pill: 999px;
+
+  /* Touch & layout metrics */
+  --touch-target: 2.75rem; /* 44px WCAG / mobile minimum */
+  --sidebar-width: 15.5rem;
+  --topbar-height: 3.75rem;
+  --bottom-nav-height: 4rem;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+
+  /* Light Theme — Warm Scholarly Paper (WCAG 2.1 AA >= 4.5:1) */
+  --bg-canvas: #f7f6f2;
+  --bg-surface: #ffffff;
+  --bg-subtle: #efede6;
+  --bg-hover: #eae7de;
+  --bg-elevated: #ffffff;
+
+  --border-subtle: #e2dfd5;
+  --border-strong: #c7c2b4;
+
+  --text-primary: #18181b;
+  --text-secondary: #4a4a52;
+  --text-muted: #5c5c66;
+  --text-inverse: #ffffff;
+
+  --accent-primary: #0f625c;
+  --accent-primary-hover: #0b4e49;
+  --accent-primary-soft: #e3f2f0;
+  --accent-primary-text: #0b4e49;
+
+  --focus-ring: #0f625c;
+
+  /* Semantic & NLI Palette (Light) */
+  --nli-entailment: #116944;
+  --nli-entailment-bg: #e5f5ed;
+  --nli-contradiction: #b42318;
+  --nli-contradiction-bg: #fceae8;
+  --nli-neutral: #475467;
+  --nli-neutral-bg: #eef1f5;
+
+  --status-info: #1558a8;
+  --status-info-bg: #e8f1fc;
+  --status-warning: #92400e;
+  --status-warning-bg: #fef3c7;
+  --status-error: #b42318;
+  --status-error-bg: #fceae8;
+  --status-success: #116944;
+  --status-success-bg: #e5f5ed;
+
+  --shadow-xs: 0 1px 2px rgba(24, 24, 27, 0.05);
+  --shadow-sm: 0 2px 8px rgba(24, 24, 27, 0.07);
+  --shadow-md: 0 10px 30px rgba(24, 24, 27, 0.11);
+}
+
+html[data-theme='dark'] {
+  --bg-canvas: #121417;
+  --bg-surface: #1a1d21;
+  --bg-subtle: #22262c;
+  --bg-hover: #2a2f37;
+  --bg-elevated: #20242a;
+
+  --border-subtle: #2e343d;
+  --border-strong: #464f5d;
+
+  --text-primary: #f2f4f7;
+  --text-secondary: #c8cfd8;
+  --text-muted: #98a2b3;
+  --text-inverse: #0c1116;
+
+  --accent-primary: #2dd4bf;
+  --accent-primary-hover: #5eead4;
+  --accent-primary-soft: rgba(45, 212, 191, 0.14);
+  --accent-primary-text: #5eead4;
+
+  --focus-ring: #5eead4;
+
+  /* Semantic & NLI Palette (Dark, high contrast) */
+  --nli-entailment: #4ade80;
+  --nli-entailment-bg: rgba(74, 222, 128, 0.15);
+  --nli-contradiction: #f87171;
+  --nli-contradiction-bg: rgba(248, 113, 113, 0.16);
+  --nli-neutral: #cbd5e1;
+  --nli-neutral-bg: rgba(148, 163, 184, 0.16);
+
+  --status-info: #60a5fa;
+  --status-info-bg: rgba(96, 165, 250, 0.16);
+  --status-warning: #fbbf24;
+  --status-warning-bg: rgba(251, 191, 36, 0.16);
+  --status-error: #f87171;
+  --status-error-bg: rgba(248, 113, 113, 0.16);
+  --status-success: #4ade80;
+  --status-success-bg: rgba(74, 222, 128, 0.16);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+html[data-scale='0.9'] {
+  font-size: 14.4px;
+}
+
+html[data-scale='1'] {
+  font-size: 16px;
+}
+
+html[data-scale='1.12'] {
+  font-size: 17.92px;
+}
+
+html[data-scale='1.25'] {
+  font-size: 20px;
+}

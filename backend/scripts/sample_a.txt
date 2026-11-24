@@ -1,0 +1,6 @@
+Dense retrieval finds candidate passages before a classifier decides support.
+The model treats an evidence span as the premise and a claim as the hypothesis.
+Scientific claims stay tied to a character span in the source document.
+
+A second paragraph repeats the retrieval step so the splitter emits more than one passage.
+Dense retrieval finds candidate passages before a classifier decides support or contradiction.
