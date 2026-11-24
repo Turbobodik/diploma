@@ -4,10 +4,47 @@ import re
 import threading
 from typing import Protocol
 
+from app.ml.embedder import tokenize_multilingual
 from app.ml.types import NliLabel, NLIResult
 
-_TOKEN = re.compile(r"[a-z0-9]+")
-_NEG = {"not", "no", "never", "without", "cannot", "contradicts", "refutes", "neither"}
+_TOKEN = re.compile(r"[a-zа-яё0-9]+")
+_CYRILLIC_CHAR = re.compile(r"[а-яё]")
+_NEG = {
+    "not",
+    "no",
+    "never",
+    "without",
+    "cannot",
+    "contradicts",
+    "refutes",
+    "neither",
+    "не",
+    "нет",
+    "ни",
+    "никогда",
+    "без",
+    "невозможно",
+    "отсутствует",
+    "отсутствуют",
+    "опровергает",
+    "опровергают",
+    "опроверг",
+    "противоречит",
+    "противоречат",
+    "незначимо",
+}
+_POS_DIR_PREFIXES = ("повыш", "увелич", "улучш", "ускор", "вырос", "рост", "укреп")
+_NEG_DIR_PREFIXES = ("сниж", "уменьш", "ухудш", "замедл", "паден", "упал", "сокращ", "ослаб")
+
+
+def _directional_polarity(tokens: set[str]) -> int:
+    has_pos = any(tok.startswith(_POS_DIR_PREFIXES) for tok in tokens)
+    has_neg = any(tok.startswith(_NEG_DIR_PREFIXES) for tok in tokens)
+    if has_pos and not has_neg:
+        return 1
+    if has_neg and not has_pos:
+        return -1
+    return 0
 
 
 class NLIClassifier(Protocol):
@@ -44,7 +81,7 @@ def apply_class_weights(
 
 
 class StubNLIClassifier:
-    """Fast lexical-overlap stub NLI classifier for offline unit tests."""
+    """Fast lexical-overlap stub NLI classifier for offline unit tests and lightweight demos."""
 
     def __init__(self, model_name: str = "stub-overlap-v1") -> None:
         self.model_name = model_name
@@ -52,20 +89,32 @@ class StubNLIClassifier:
     def predict_batch(self, pairs: list[tuple[str, str]]) -> list[NLIResult]:
         results: list[NLIResult] = []
         for premise, hypothesis in pairs:
-            pt = set(_TOKEN.findall(premise.lower()))
-            ht = set(_TOKEN.findall(hypothesis.lower()))
+            p_raw = set(_TOKEN.findall(premise.lower().replace("ё", "е")))
+            h_raw = set(_TOKEN.findall(hypothesis.lower().replace("ё", "е")))
+            is_cyrillic = bool(_CYRILLIC_CHAR.search(premise.lower()) or _CYRILLIC_CHAR.search(hypothesis.lower()))
+
+            pt = set(tokenize_multilingual(premise, drop_ru_stopwords=is_cyrillic))
+            ht = set(tokenize_multilingual(hypothesis, drop_ru_stopwords=is_cyrillic))
             if not pt or not ht:
                 probs: dict[NliLabel, float] = {"entailment": 0.25, "contradiction": 0.25, "neutral": 0.50}
                 results.append(NLIResult("neutral", 0.500, self.model_name, probs))
                 continue
+
             overlap = len(pt & ht) / len(ht)
-            score = round(max(0.0, min(1.0, overlap)), 3)
-            if bool(pt & _NEG) != bool(ht & _NEG) and overlap >= 0.2:
+            neg_flip = bool(p_raw & _NEG) != bool(h_raw & _NEG)
+            dir_p = _directional_polarity(pt) if is_cyrillic else 0
+            dir_h = _directional_polarity(ht) if is_cyrillic else 0
+            dir_flip = dir_p != 0 and dir_h != 0 and dir_p != dir_h
+
+            if (neg_flip and overlap >= (0.30 if is_cyrillic else 0.20)) or (dir_flip and overlap >= 0.35):
                 label: NliLabel = "contradiction"
-            elif overlap >= 0.45:
+                score = round(max(0.55 if is_cyrillic else 0.0, min(0.95, overlap + (0.25 if is_cyrillic else 0.0))), 3)
+            elif overlap >= (0.42 if is_cyrillic else 0.45):
                 label = "entailment"
+                score = round(max(0.55 if is_cyrillic else 0.0, min(0.95, overlap + (0.15 if is_cyrillic else 0.0))), 3)
             else:
                 label = "neutral"
+                score = round(max(0.0, min(1.0, (1.0 - overlap) if is_cyrillic else overlap)), 3)
             rem = round(max(0.0, (1.0 - score) / 2.0), 3)
             probs = {"entailment": rem, "contradiction": rem, "neutral": rem}
             probs[label] = score

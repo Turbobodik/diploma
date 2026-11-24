@@ -13,11 +13,9 @@ class ProjectRepository:
         return self._db.scalar(stmt)
 
     def exists_name_for_owner(self, owner_id: str, name: str) -> bool:
-        stmt = select(Project.id).where(
-            Project.owner_id == owner_id,
-            func.lower(Project.name) == name.lower(),
-        )
-        return self._db.scalar(stmt) is not None
+        target = name.casefold()
+        existing_names = self._db.scalars(select(Project.name).where(Project.owner_id == owner_id)).all()
+        return any(existing.casefold() == target for existing in existing_names)
 
     def list_by_owner(self, owner_id: str, *, limit: int, offset: int) -> tuple[list[tuple[Project, int, int]], int]:
         total = int(

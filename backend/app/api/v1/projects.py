@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user_id
 from app.core.constants import DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT
 from app.db import get_db
+from app.demo_corpora import DEFAULT_DEMO_PRESET_ID
 from app.models.schemas import DeleteOut, ErrorOut, ProjectIn, ProjectListOut, ProjectOut
 from app.services.project_service import ProjectService
 
@@ -44,6 +45,31 @@ def create_project(
     db: Session = Depends(get_db),
 ) -> ProjectOut:
     return ProjectService(db).create_project(user_id, body)
+
+
+@router.post(
+    "/demo",
+    response_model=ProjectOut,
+    status_code=201,
+    summary="Create a preloaded demo project with two controversial Russian CyberLeninka articles and run analysis",
+    responses={
+        401: {"model": ErrorOut, "description": "Unauthorized"},
+        404: {"model": ErrorOut, "description": "Unknown demo preset"},
+    },
+)
+def create_demo_project(
+    preset: str = Query(
+        default=DEFAULT_DEMO_PRESET_ID,
+        description="Bundled demo corpus identifier.",
+    ),
+    sync: bool | None = Query(
+        default=None,
+        description="Run pipeline synchronously (defaults to true in stub mode and false in transformers mode).",
+    ),
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    return ProjectService(db).create_demo_project(user_id, preset_id=preset, sync=sync)
 
 
 @router.delete(

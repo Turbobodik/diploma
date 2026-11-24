@@ -1,5 +1,6 @@
-import { FolderPlus, FolderSearch, Plus, RefreshCw } from 'lucide-react';
+import { FolderPlus, FolderSearch, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { Button } from '../components/common/Button';
 import { EmptyState } from '../components/common/EmptyState';
@@ -15,6 +16,7 @@ import type { ProjectSortField } from '../models/ui';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
   clearProjectsError,
+  createDemoProject,
   createProject,
   deleteProject,
   fetchProjects,
@@ -33,9 +35,19 @@ const SORT_OPTIONS = [
 export default function ProjectsPage() {
   useDocumentTitle('Projects');
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const projects = useAppSelector(selectFilteredSortedProjects);
-  const { status, creating, deletingId, error, searchQuery, sortField, sortDirection, total } =
-    useAppSelector((state) => state.projects);
+  const {
+    status,
+    creating,
+    creatingDemo,
+    deletingId,
+    error,
+    searchQuery,
+    sortField,
+    sortDirection,
+    total,
+  } = useAppSelector((state) => state.projects);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<ProjectItem | null>(null);
@@ -51,6 +63,13 @@ export default function ProjectsPage() {
       return true;
     }
     return false;
+  };
+
+  const handleLaunchDemo = async () => {
+    const result = await dispatch(createDemoProject(undefined));
+    if (createDemoProject.fulfilled.match(result)) {
+      navigate(`/projects/${result.payload.id}`);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -69,6 +88,15 @@ export default function ProjectsPage() {
           </p>
         </div>
         <div className="page-header-actions">
+          <Button
+            variant="secondary"
+            onClick={() => void handleLaunchDemo()}
+            loading={creatingDemo}
+            id="launch-demo-project-btn"
+          >
+            <Sparkles size={16} aria-hidden="true" />
+            Пример: КиберЛенинка (RU)
+          </Button>
           <Button
             variant="secondary"
             onClick={() => void dispatch(fetchProjects())}
@@ -91,6 +119,29 @@ export default function ProjectsPage() {
           </Button>
         </div>
       </header>
+
+      <section
+        className="surface-card surface-card-compact cluster"
+        aria-label="Russian CyberLeninka demo example"
+      >
+        <div className="stack-sm flex-1">
+          <strong>Готовый пример на русском: 2 статьи с КиберЛенинки по спорной теме</strong>
+          <p className="text-secondary">
+            Удалённая работа и продуктивность IT-специалистов — система в один клик загрузит обе
+            статьи, выделит тезисы и покажет подтверждения (зелёные) и противоречия (красные).
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => void handleLaunchDemo()}
+          loading={creatingDemo}
+          id="launch-demo-banner-btn"
+        >
+          <Sparkles size={15} aria-hidden="true" />
+          Запустить пример
+        </Button>
+      </section>
 
       <section
         className="surface-card surface-card-compact toolbar-row"
@@ -128,7 +179,7 @@ export default function ProjectsPage() {
           description={
             searchQuery
               ? `No project names match "${searchQuery}". Try clearing the search filter.`
-              : 'Create a project workspace to upload scientific PDF/TXT papers and verify claims.'
+              : 'Create a project workspace to upload scientific PDF/TXT papers, or launch the preloaded Russian CyberLeninka example.'
           }
           action={
             searchQuery ? (
@@ -136,10 +187,20 @@ export default function ProjectsPage() {
                 Clear search
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => setCreateModalOpen(true)}>
-                <Plus size={16} aria-hidden="true" />
-                New project
-              </Button>
+              <div className="cluster">
+                <Button
+                  variant="primary"
+                  onClick={() => void handleLaunchDemo()}
+                  loading={creatingDemo}
+                >
+                  <Sparkles size={16} aria-hidden="true" />
+                  Запустить пример (КиберЛенинка)
+                </Button>
+                <Button variant="secondary" onClick={() => setCreateModalOpen(true)}>
+                  <Plus size={16} aria-hidden="true" />
+                  New project
+                </Button>
+              </div>
             )
           }
         />

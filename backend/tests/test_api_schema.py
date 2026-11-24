@@ -9,6 +9,7 @@ def test_openapi_exposes_v1_endpoints():
     paths = schema["paths"]
     assert "/health" in paths
     assert "/api/v1/projects" in paths
+    assert "/api/v1/projects/demo" in paths
     assert "/api/v1/projects/{project_id}/documents" in paths
     assert "/api/v1/projects/{project_id}/analyze" in paths
     assert "/api/v1/projects/{project_id}/jobs" in paths
