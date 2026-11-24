@@ -206,4 +206,30 @@ describe('EvidenceMap', () => {
     await user.click(passageNode);
     expect(onSelectPassage).toHaveBeenCalledWith('p1');
   });
+
+  it('switches cleanly between Острова, Весы, and Созвездие layouts with highlighted edge labels', async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <EvidenceMap graph={SAMPLE_GRAPH} selectedClaimId="c1" onSelectClaim={vi.fn()} />,
+    );
+
+    // Default for small graph is Острова (clusters)
+    expect(screen.getByRole('button', { name: 'Острова' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/ПОДТВЕРЖДЁННЫЕ ФАКТЫ/i)).toBeInTheDocument();
+    expect(container.querySelectorAll('.graph-edge-pill-active').length).toBeGreaterThanOrEqual(1);
+
+    // Switch to Весы (balance)
+    await user.click(screen.getByRole('button', { name: 'Весы' }));
+    expect(screen.getByRole('button', { name: 'Весы' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/ПРОТИВ \/ ОПРОВЕРГАЮТ/i)).toBeInTheDocument();
+    expect(screen.getByText(/ЗА \/ ПОДТВЕРЖДАЮТ/i)).toBeInTheDocument();
+
+    // Switch to Созвездие (constellation)
+    await user.click(screen.getByRole('button', { name: 'Созвездие' }));
+    expect(screen.getByRole('button', { name: 'Созвездие' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /document: paper_a\.txt/i })).toBeInTheDocument();
+  });
 });
