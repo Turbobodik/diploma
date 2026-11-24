@@ -216,6 +216,7 @@ async function waitForServer(url, timeoutMs = 20000) {
 }
 
 async function attachApiMocks(page) {
+  await page.route('https://fonts.**', (route) => route.abort());
   await page.route('**/health', (route) =>
     route.fulfill({
       status: 200,

@@ -183,6 +183,6 @@ From `frontend/`:
 npm run lint          # ESLint
 npm run format:check  # Prettier
 npm run build         # tsc -b + vite build
-npm run test          # 6 Vitest suites (16 tests)
+npm run test          # 6 Vitest suites (17 tests)
 npm run test:e2e      # Playwright Chromium E2E + adaptive suites (4 tests)
 ```

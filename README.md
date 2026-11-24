@@ -24,7 +24,7 @@ Hosted on Render free tier, so the first request after inactivity may take 30-50
 - Forms with validation: [AuthForm.tsx](frontend/src/features/auth/AuthForm.tsx), [CreateProjectForm.tsx](frontend/src/features/projects/CreateProjectForm.tsx), [DocumentUploader.tsx](frontend/src/features/workspace/DocumentUploader.tsx), [ClaimDetailDrawer.tsx](frontend/src/features/workspace/ClaimDetailDrawer.tsx)
 - Error handling and loading states: [httpClient.ts](frontend/src/services/httpClient.ts), [ErrorBoundary.tsx](frontend/src/components/common/ErrorBoundary.tsx), [ToastContainer.tsx](frontend/src/components/common/ToastContainer.tsx), [Skeleton.tsx](frontend/src/components/common/Skeleton.tsx)
 - Evidence graph and tables: [EvidenceMap.tsx](frontend/src/features/workspace/EvidenceMap.tsx), [ClaimsTable.tsx](frontend/src/features/workspace/ClaimsTable.tsx), [ProjectTable.tsx](frontend/src/features/projects/ProjectTable.tsx)
-- Tests: 6 Vitest unit suites (16 tests) under `frontend/src/**/*.test.*` and Playwright E2E specs in [frontend/e2e/app.spec.ts](frontend/e2e/app.spec.ts) and [frontend/e2e/adaptive.spec.ts](frontend/e2e/adaptive.spec.ts)
+- Tests: 6 Vitest unit suites (17 tests) under `frontend/src/**/*.test.*` and Playwright E2E specs in [frontend/e2e/app.spec.ts](frontend/e2e/app.spec.ts) and [frontend/e2e/adaptive.spec.ts](frontend/e2e/adaptive.spec.ts)
 
 ### API documentation
 

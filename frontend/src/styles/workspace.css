@@ -152,7 +152,7 @@
 
 .graph-viewport {
   width: 100%;
-  height: clamp(22rem, 48vh, 34rem);
+  height: clamp(26rem, 58vh, 40rem);
   overflow: hidden;
   cursor: grab;
   touch-action: none;

@@ -83,4 +83,85 @@ describe('EvidenceMap', () => {
     await user.click(claimNode);
     expect(onSelect).toHaveBeenCalledWith('c1');
   });
+
+  it('auto-focuses large graphs and allows zooming up to 400%', async () => {
+    const user = userEvent.setup();
+    const nodes: GraphResponse['nodes'] = [
+      {
+        id: 'doc:d1',
+        type: 'document',
+        label: 'large_paper.pdf',
+        document_id: 'd1',
+        page_no: null,
+        has_evidence: null,
+        confidence: null,
+      },
+    ];
+    const edges: GraphResponse['edges'] = [];
+    for (let i = 1; i <= 15; i += 1) {
+      nodes.push(
+        {
+          id: `claim:c${i}`,
+          type: 'claim',
+          label: `Claim number ${i}`,
+          document_id: 'd1',
+          page_no: i,
+          has_evidence: true,
+          confidence: 0.9,
+        },
+        {
+          id: `passage:p${i}`,
+          type: 'passage',
+          label: `Evidence passage ${i}`,
+          document_id: 'd1',
+          page_no: i,
+          has_evidence: null,
+          confidence: null,
+        },
+      );
+      edges.push(
+        {
+          id: `src:c${i}`,
+          source: 'doc:d1',
+          target: `claim:c${i}`,
+          kind: 'extracted_from',
+          label: null,
+          model_label: null,
+          user_label: null,
+          score: null,
+        },
+        {
+          id: `ev:e${i}`,
+          source: `claim:c${i}`,
+          target: `passage:p${i}`,
+          kind: 'evidence',
+          label: 'entailment',
+          model_label: 'entailment',
+          user_label: null,
+          score: 0.85,
+        },
+      );
+    }
+
+    const onSelect = vi.fn();
+    render(
+      <EvidenceMap
+        graph={{ project_id: 'p1', nodes, edges }}
+        selectedClaimId="c1"
+        onSelectClaim={onSelect}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Focused' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/Claim 1\/15/)).toBeInTheDocument();
+
+    const zoomIn = screen.getByLabelText('Zoom in evidence map');
+    for (let k = 0; k < 8; k += 1) {
+      await user.click(zoomIn);
+    }
+    expect(screen.getByText('260%')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Next claim'));
+    expect(onSelect).toHaveBeenCalledWith('c2');
+  });
 });
