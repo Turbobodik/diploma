@@ -51,6 +51,22 @@ Every requirement for the **API Documentation** review is implemented and verifi
 
 ---
 
+## Stage 3 — Adaptive UI (Web/Mobile) Criterion Compliance Map
+
+Every requirement for the **Adaptive UI (Web/Mobile)** review is implemented and verifiable at the paths below:
+
+| Requirement | Implementation Location |
+|---|---|
+| **Labeled PDF Mockup Specification (3 Device Variants + Component Library + Interactive States)** | [`docs/adaptive-ui/Adaptive_UI_Specification_Kanoplich_Bahdan.pdf`](docs/adaptive-ui/Adaptive_UI_Specification_Kanoplich_Bahdan.pdf) (overview in [`docs/adaptive-ui/README.md`](docs/adaptive-ui/README.md), generator in [`frontend/scripts/generate_adaptive_pdf.mjs`](frontend/scripts/generate_adaptive_pdf.mjs)) |
+| **3 Device Types + Foldable/Ultrawide + Orientation + Keyboard-Safe Layout** | [`frontend/src/styles/layout.css`](frontend/src/styles/layout.css), [`frontend/src/styles/workspace.css`](frontend/src/styles/workspace.css), [`AppShell.tsx`](frontend/src/components/layout/AppShell.tsx) (desktop sidebar + one-hand mobile bottom tab bar + card fallbacks) |
+| **Relative Units (`rem`, `clamp()`, CSS Grid/Flex) & ≥ 44px Touch Targets** | [`frontend/src/styles/tokens.css`](frontend/src/styles/tokens.css) (`--touch-target: 2.75rem`) & [`frontend/src/styles/components.css`](frontend/src/styles/components.css) |
+| **WCAG 2.1 AA Contrast (≥ 4.5:1), Consistent Typography, Light/Dark Themes & Text Scale (90%–125%)** | [`frontend/src/styles/tokens.css`](frontend/src/styles/tokens.css) & [`SettingsPage.tsx`](frontend/src/pages/SettingsPage.tsx) |
+| **Automatic Device Detection (Breakpoint, DPR, Orientation, Aspect Ratio)** | [`frontend/src/hooks/useDeviceProfile.ts`](frontend/src/hooks/useDeviceProfile.ts) |
+| **Live Reusable Component Library Showcase (All States)** | `/design-system` route — [`frontend/src/pages/DesignSystemPage.tsx`](frontend/src/pages/DesignSystemPage.tsx) |
+| **Automated Multi-Viewport Playwright Verification (6 viewports, 0px overflow, ≥ 44px touch targets)** | [`frontend/e2e/adaptive.spec.ts`](frontend/e2e/adaptive.spec.ts) |
+
+---
+
 ## How to Run the Project
 
 ### 1. View & Validate API Documentation
@@ -132,7 +148,8 @@ diploma/
 ├── backend/                   # FastAPI layered backend + local ML/NLI pipeline
 ├── docs/
 │   ├── frontend/              # Front-End architecture, user flows, stack justification
-│   ├── api/                   # Validated OpenAPI 3.1 spec (yaml/json)
+│   ├── adaptive-ui/           # Labeled Adaptive UI PDF spec, 3-device screenshots & guide
+│   ├── api/                   # Validated OpenAPI 3.1 spec, ReDoc HTML, guides, Postman, cURL
 │   ├── ml/                    # SciFact retrieval/NLI & claim-span benchmarks
 │   └── criteria/              # Stage 3 diploma review rubrics & checklists
 ├── expertise-database/        # Frozen Stage 2 Database criterion review package

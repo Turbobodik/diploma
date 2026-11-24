@@ -478,3 +478,64 @@
     transform: rotate(360deg);
   }
 }
+
+/* Design System State Showcase & Color Swatches */
+.state-preview-hover {
+  background: var(--accent-primary-hover) !important;
+}
+
+.state-preview-focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.state-preview-active {
+  transform: translateY(1px);
+  filter: brightness(0.9);
+}
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+.swatch-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.swatch-bar {
+  height: 2.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.swatch-primary {
+  background: var(--accent-primary);
+}
+
+.swatch-entailment {
+  background: var(--nli-entailment);
+}
+
+.swatch-contradiction {
+  background: var(--nli-contradiction);
+}
+
+.swatch-neutral {
+  background: var(--nli-neutral);
+}
+
+.swatch-canvas {
+  background: var(--bg-canvas);
+}
+
+.swatch-ink {
+  background: var(--text-primary);
+}

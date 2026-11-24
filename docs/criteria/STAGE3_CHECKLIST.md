@@ -33,9 +33,9 @@
 - [x] Front-End Architecture documentation (`docs/frontend/ARCHITECTURE.md`)
 
 ## Track 4: Adaptive UI (`frontend/` & `docs/adaptive-ui/`)
-- [ ] Responsive across Mobile (375px), Tablet (768px), Desktop (1440px), Ultrawide/4K & foldable
-- [ ] Automatic device detection hook (breakpoint, DPR, orientation, aspect ratio)
-- [ ] Relative units (`rem`, `clamp()`, CSS grid/flex), >=44px touch targets, SVG icons (`lucide-react`)
-- [ ] One-hand mobile bottom tab bar + mobile list/card fallback for evidence graph + keyboard-safe layout
-- [ ] Interactive Design System showcase route with all component states
-- [ ] Labeled PDF specification (`docs/adaptive-ui/Adaptive_UI_Specification_Kanoplich_Bahdan.pdf`) with 3 device variants + component library + states
+- [x] Responsive across Mobile (375px), Tablet (768px), Desktop (1440px), Ultrawide/4K & foldable (320px) — verified by Playwright `e2e/adaptive.spec.ts`
+- [x] Automatic device detection hook (breakpoint, DPR, orientation, aspect ratio)
+- [x] Relative units (`rem`, `clamp()`, CSS grid/flex), >=44px touch targets, SVG icons (`lucide-react`)
+- [x] One-hand mobile bottom tab bar + mobile list/card fallback for evidence graph + keyboard-safe layout
+- [x] Interactive Design System showcase route with all component states
+- [x] Labeled PDF specification (`docs/adaptive-ui/Adaptive_UI_Specification_Kanoplich_Bahdan.pdf`) with 3 device variants + component library + states
