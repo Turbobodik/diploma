@@ -75,6 +75,7 @@ export default function WorkspacePage() {
   const [viewMode, setViewMode] = useState<'map' | 'table'>(() =>
     device.breakpoint === 'mobile' ? 'table' : 'map',
   );
+  const [selectedPassageId, setSelectedPassageId] = useState<string | null>(null);
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
   const debouncedSearch = useDebounce(filters.search, 250);
   const isWorkspaceLoading = loading || loadedProjectId !== projectId;
@@ -393,7 +394,12 @@ export default function WorkspacePage() {
                 <EvidenceMap
                   graph={graph}
                   selectedClaimId={selectedClaimId}
-                  onSelectClaim={(claimId) => dispatch(selectClaim(claimId))}
+                  selectedPassageId={selectedPassageId}
+                  onSelectClaim={(claimId) => {
+                    setSelectedPassageId(null);
+                    dispatch(selectClaim(claimId));
+                  }}
+                  onSelectPassage={(passageId) => setSelectedPassageId(passageId)}
                 />
               ) : (
                 <ClaimsTable
@@ -401,7 +407,10 @@ export default function WorkspacePage() {
                   selectedClaimId={selectedClaimId}
                   sortField={filters.sortField}
                   sortDirection={filters.sortDirection}
-                  onSelectClaim={(claimId) => dispatch(selectClaim(claimId))}
+                  onSelectClaim={(claimId) => {
+                    setSelectedPassageId(null);
+                    dispatch(selectClaim(claimId));
+                  }}
                   onSort={(field) => dispatch(setClaimSort({ field }))}
                 />
               )}
@@ -409,6 +418,7 @@ export default function WorkspacePage() {
 
             <ClaimDetailDrawer
               claim={selectedClaim}
+              focusedPassageId={selectedPassageId}
               overridingEvidenceId={overridingEvidenceId}
               onOverrideLabel={(evidenceId, userLabel) =>
                 void dispatch(overrideEvidenceThunk({ evidenceId, userLabel }))

@@ -164,4 +164,46 @@ describe('EvidenceMap', () => {
     await user.click(screen.getByLabelText('Next claim'));
     expect(onSelect).toHaveBeenCalledWith('c2');
   });
+
+  it('normalizes passage-to-claim edge direction and triggers onSelectPassage on click', async () => {
+    const user = userEvent.setup();
+    const onSelectPassage = vi.fn();
+    const backendShapedGraph: GraphResponse = {
+      ...SAMPLE_GRAPH,
+      edges: [
+        SAMPLE_GRAPH.edges[0],
+        {
+          ...SAMPLE_GRAPH.edges[1],
+          source: 'passage:p1',
+          target: 'claim:c1',
+          label: 'contradiction',
+        },
+      ],
+    };
+
+    const { container } = render(
+      <EvidenceMap
+        graph={backendShapedGraph}
+        selectedClaimId="c1"
+        onSelectClaim={vi.fn()}
+        onSelectPassage={onSelectPassage}
+      />,
+    );
+
+    // Verify all graph edge curves go left-to-right (start X < end X)
+    const paths = Array.from(container.querySelectorAll('svg.graph-svg path'));
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    for (const p of paths) {
+      const d = p.getAttribute('d') ?? '';
+      const nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+      expect(nums.length).toBe(8);
+      expect(nums[0]).toBeLessThan(nums[6]);
+    }
+
+    const passageNode = screen.getByRole('button', {
+      name: /passage: Our benchmarks confirm/i,
+    });
+    await user.click(passageNode);
+    expect(onSelectPassage).toHaveBeenCalledWith('p1');
+  });
 });
