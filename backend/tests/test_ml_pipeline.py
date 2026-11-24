@@ -114,3 +114,43 @@ def test_claim_span_eval_meets_us03_gate_offline():
     assert row.us03_pass is True
     assert row.span_detection_rate >= 0.70
     assert row.mean_matched_iou >= 0.90
+
+
+def test_russian_pipeline_extracts_claims_and_detects_entailment_and_contradiction():
+    from app.ml.nli import StubNLIClassifier
+
+    ru_text = (
+        "Аннотация. В данной статье рассматривается удалённая работа.\n"
+        "Источник: адаптация научных публикаций (КиберЛенинка), 2024.\n\n"
+        "Результаты исследования показывают, что удалённая работа повышает продуктивность разработчиков на 16%. "
+        "Гибридный формат занятости повышает удержание персонала в IT-компаниях на 27%.\n\n"
+        "Список литературы\n"
+        "[1] Соколов И. А. Эффективность дистанционной занятости. 2024."
+    )
+    spans = split_sentences_with_spans(ru_text)
+    assert len(spans) >= 4
+
+    extractor = LocalClaimExtractor(mode="hybrid", threshold=0.55, embedder=StubEmbedder())
+    claims = extractor.extract(ru_text, is_pdf=False)
+    assert len(claims) >= 2
+    for c in claims:
+        assert ru_text[c.char_start : c.char_end] == c.text
+        assert "Источник:" not in c.text
+        assert "Соколов" not in c.text
+
+    nli = StubNLIClassifier()
+    preds = nli.predict_batch(
+        [
+            (
+                "Наши расчёты подтверждают, что гибридный формат занятости повышает удержание персонала в IT-компаниях на 25%.",
+                "Гибридный формат занятости повышает удержание персонала в IT-компаниях на 27%.",
+            ),
+            (
+                "Удалённая работа не повышает продуктивность разработчиков в кросс-функциональных командах.",
+                "Удалённая работа повышает продуктивность разработчиков на 16%.",
+            ),
+        ]
+    )
+    assert preds[0].label == "entailment"
+    assert preds[1].label == "contradiction"
+

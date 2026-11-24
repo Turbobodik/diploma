@@ -1,25 +1,21 @@
-# Complete API Endpoint Reference
+# Endpoint Reference
 
-Base URL (local): `http://127.0.0.1:8000`  
-OpenAPI 3.1.0 Contract: [`../openapi.yaml`](../openapi.yaml) · Error Reference: [`errors.md`](errors.md) · Data Models: [`../schemas/models.md`](../schemas/models.md)
+Base URL (local): `http://127.0.0.1:8000` (production: `https://factmap-scholar-api.onrender.com`).  
+OpenAPI spec: [`../openapi.yaml`](../openapi.yaml). Errors: [`errors.md`](errors.md). Models: [`../schemas/models.md`](../schemas/models.md).
 
-Every response includes `X-Request-ID` for log correlation. Protected endpoints require `Authorization: Bearer <jwt>`.
+All responses echo `X-Request-ID`. Protected routes require `Authorization: Bearer <jwt>`.
 
----
-
-## 1. System Endpoints
+## 1. System
 
 ### `GET /health`
-- **Auth:** Public (`security: []`)
-- **Purpose:** Verify API availability, version, and active ML configuration.
-- **Status Codes:** `200 OK`, `400 Bad Request`, `500 Internal Server Error`
 
-**Sample Request:**
+- Auth: public (`security: []`)
+- Status codes: `200`, `400`, `500`
+
 ```bash
 curl -s http://127.0.0.1:8000/health
 ```
 
-**Sample Response (`200 OK`):**
 ```json
 {
   "status": "ok",
@@ -31,25 +27,23 @@ curl -s http://127.0.0.1:8000/health
 ```
 
 ### `GET /metrics`
-- **Auth:** Public (`security: []`)
-- **Purpose:** Expose Prometheus text exposition metrics (`factmap_http_requests_total`, `factmap_http_request_duration_seconds`).
-- **Status Codes:** `200 OK` (`text/plain`), `400 Bad Request`
 
-**Sample Request:**
+- Auth: public (`security: []`)
+- Status codes: `200` (`text/plain` Prometheus format), `400`
+
 ```bash
 curl -s http://127.0.0.1:8000/metrics | head -n 5
 ```
 
----
-
 ## 2. Authentication (`/api/v1/auth`)
 
 ### `POST /api/v1/auth/register`
-- **Auth:** Public (`security: []`)
-- **Purpose:** Register a researcher account (Argon2id password hash) and issue a Bearer JWT.
-- **Status Codes:** `201 Created`, `409 Conflict` (`duplicate_email`), `422 Unprocessable Entity` (`validation_error`)
 
-**Sample Request:**
+- Auth: public (`security: []`)
+- Status codes: `201`, `409` (`duplicate_email`), `422` (`validation_error`)
+
+Request:
+
 ```json
 {
   "email": "researcher@ehu.lt",
@@ -58,7 +52,8 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 }
 ```
 
-**Sample Response (`201 Created`):**
+Response (`201 Created`):
+
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -72,7 +67,8 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 }
 ```
 
-**Edge-Case Error (`409 Conflict`):**
+Duplicate email (`409 Conflict`):
+
 ```json
 {
   "code": "duplicate_email",
@@ -82,11 +78,12 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 ```
 
 ### `POST /api/v1/auth/login`
-- **Auth:** Public (`security: []`)
-- **Purpose:** Authenticate an existing account and obtain a Bearer JWT.
-- **Status Codes:** `200 OK`, `401 Unauthorized` (`invalid_login`), `422 Unprocessable Entity`
 
-**Sample Request:**
+- Auth: public (`security: []`)
+- Status codes: `200`, `401` (`invalid_login`), `422`
+
+Request:
+
 ```json
 {
   "email": "researcher@ehu.lt",
@@ -94,9 +91,10 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 }
 ```
 
-**Sample Response (`200 OK`):** Same `AuthOut` schema as `/register`.
+Response (`200 OK`): `AuthOut` (same shape as `/register`).
 
-**Error (`401 Unauthorized`):**
+Invalid credentials (`401 Unauthorized`):
+
 ```json
 {
   "code": "invalid_login",
@@ -106,11 +104,10 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 ```
 
 ### `GET /api/v1/auth/me`
-- **Auth:** `HTTPBearer`
-- **Purpose:** Return the authenticated researcher's profile (`UserOut`).
-- **Status Codes:** `200 OK`, `401 Unauthorized` (`unauthorized`)
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Status codes: `200`, `401` (`unauthorized`)
+
 ```json
 {
   "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -119,16 +116,14 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 }
 ```
 
----
-
 ## 3. Projects (`/api/v1/projects`)
 
 ### `GET /api/v1/projects`
-- **Auth:** `HTTPBearer`
-- **Query Params:** `limit` (`1..200`, default `50`), `offset` (`>= 0`, default `0`)
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `422 Unprocessable Entity`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Query params: `limit` (`1..200`, default `50`), `offset` (`>= 0`, default `0`)
+- Status codes: `200`, `401`, `422`
+
 ```json
 {
   "projects": [
@@ -147,42 +142,37 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 ```
 
 ### `POST /api/v1/projects`
-- **Auth:** `HTTPBearer`
-- **Purpose:** Create a new owner-scoped project workspace.
-- **Status Codes:** `201 Created`, `401 Unauthorized`, `409 Conflict` (`duplicate_name`), `422 Unprocessable Entity` (`empty_name` / `validation_error`)
 
-**Sample Request:**
+- Auth: `HTTPBearer`
+- Status codes: `201`, `401`, `409` (`duplicate_name`), `422` (`empty_name` / `validation_error`)
+
 ```json
 {
   "name": "Scientific NLI Literature Review"
 }
 ```
 
-**Sample Response (`201 Created`):** `ProjectOut` object.
-
 ### `DELETE /api/v1/projects/{project_id}`
-- **Auth:** `HTTPBearer`
-- **Path Params:** `project_id` (UUID)
-- **Purpose:** Permanently delete a project and cascade all documents, passages, claims, evidence edges, and stored files (GDPR US-11).
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Path param: `project_id` (UUID)
+- Cascades all documents, passages, claims, evidence rows, and stored files.
+- Status codes: `200`, `401`, `404`, `422`
+
 ```json
 {
   "deleted": "a3fc0bc4-b7be-46b2-abf3-273bf7c2737a"
 }
 ```
 
----
-
 ## 4. Documents (`/api/v1/projects/{project_id}/documents`)
 
 ### `GET /api/v1/projects/{project_id}/documents`
-- **Auth:** `HTTPBearer`
-- **Query Params:** `limit` (`1..200`, default `50`), `offset` (`>= 0`, default `0`)
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Query params: `limit` (`1..200`, default `50`), `offset` (`>= 0`, default `0`)
+- Status codes: `200`, `401`, `404`, `422`
+
 ```json
 {
   "documents": [
@@ -204,41 +194,34 @@ curl -s http://127.0.0.1:8000/metrics | head -n 5
 ```
 
 ### `POST /api/v1/projects/{project_id}/documents`
-- **Auth:** `HTTPBearer` + Sliding-Window Rate Limiter (`60 req/min`)
-- **Content-Type:** `multipart/form-data` (`file`: `.pdf` or `.txt`, 1 byte..20 MB)
-- **Response Headers:** `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-Request-ID`
-- **Status Codes:**
-  - `201 Created` (`DocumentOut`)
-  - `401 Unauthorized`
-  - `404 Not Found` (project missing or owned by another user)
-  - `409 Conflict` (`duplicate_file` — identical SHA-256 already exists in project)
-  - `413 Payload Too Large` (`bad_size` — empty or > 20 MB)
-  - `415 Unsupported Media Type` (`bad_type` — only `application/pdf` and `text/plain`)
-  - `422 Unprocessable Entity` (`extract_failed` — unreadable/scanned PDF with no text)
-  - `429 Too Many Requests` (`rate_limited` + `Retry-After`)
 
-**Sample Request:**
+- Auth: `HTTPBearer`, rate limited (`60 req/min`)
+- Body: `multipart/form-data` with field `file` (`application/pdf` or `text/plain`, `1..20971520` bytes)
+- Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-Request-ID`
+- Status codes:
+  - `201`: `DocumentOut`
+  - `401`: unauthorized
+  - `404`: project not found
+  - `409`: `duplicate_file` (same SHA-256 already in project)
+  - `413`: `bad_size` (empty or > 20 MB)
+  - `415`: `bad_type` (unsupported MIME type)
+  - `422`: `extract_failed` (unreadable or empty extracted text)
+  - `429`: `rate_limited` (`Retry-After` header included)
+
 ```bash
 curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/$PROJECT_ID/documents" \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@paper.pdf;type=application/pdf"
 ```
 
----
-
-## 5. Analysis Pipeline (`/api/v1/projects/{project_id}`)
+## 5. Analysis (`/api/v1/projects/{project_id}`)
 
 ### `POST /api/v1/projects/{project_id}/analyze`
-- **Auth:** `HTTPBearer` + Sliding-Window Rate Limiter (`60 req/min`)
-- **Query Params:** `sync` (boolean, default `false` — inline execution for tests/CLI only)
-- **Status Codes:**
-  - `202 Accepted` (`AnalyzeStartedOut`)
-  - `401 Unauthorized`
-  - `404 Not Found`
-  - `409 Conflict` (`not_ready` if no ready docs, or `already_running` if active jobs exist)
-  - `429 Too Many Requests`
 
-**Sample Response (`202 Accepted`):**
+- Auth: `HTTPBearer`, rate limited (`60 req/min`)
+- Query param: `sync` (boolean, default `false`)
+- Status codes: `202`, `401`, `404`, `409` (`not_ready` or `already_running`), `422`, `429`
+
 ```json
 {
   "status": "queued",
@@ -252,11 +235,10 @@ curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/$PROJECT_ID/documents" \
 ```
 
 ### `GET /api/v1/projects/{project_id}/jobs`
-- **Auth:** `HTTPBearer`
-- **Purpose:** Poll recent ML pipeline stage jobs (`extract_text`, `extract_claims`, `retrieve`, `nli`) and completion percentages (`0..100`).
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Status codes: `200`, `401`, `404`
+
 ```json
 {
   "jobs": [
@@ -274,20 +256,14 @@ curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/$PROJECT_ID/documents" \
 }
 ```
 
----
-
-## 6. Claims, Evidence Graph, Overrides & Export
+## 6. Claims, Graph, Overrides, and Export
 
 ### `GET /api/v1/projects/{project_id}/claims`
-- **Auth:** `HTTPBearer`
-- **Query Params:**
-  - `label`: `entailment | contradiction | neutral` (filters by `effective_label`)
-  - `document_id`: UUID (filters claims/evidence touching this document)
-  - `search`: case-insensitive substring across claim text and source document title
-  - `limit`: `1..200` (default `50`), `offset`: `>= 0` (default `0`)
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Query params: `label` (`entailment|contradiction|neutral`), `document_id` (UUID), `search` (substring), `limit` (`1..200`, default `50`), `offset` (`>= 0`, default `0`)
+- Status codes: `200`, `401`, `404`, `422`
+
 ```json
 {
   "claims": [
@@ -329,11 +305,11 @@ curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/$PROJECT_ID/documents" \
 ```
 
 ### `GET /api/v1/projects/{project_id}/graph`
-- **Auth:** `HTTPBearer`
-- **Query Params:** `label`, `document_id`, `include_neutral` (boolean, default `true`)
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
 
-**Sample Response (`200 OK`):**
+- Auth: `HTTPBearer`
+- Query params: `label`, `document_id`, `include_neutral` (boolean, default `true`)
+- Status codes: `200`, `401`, `404`, `422`
+
 ```json
 {
   "project_id": "a3fc0bc4-b7be-46b2-abf3-273bf7c2737a",
@@ -350,23 +326,27 @@ curl -s -X POST "http://127.0.0.1:8000/api/v1/projects/$PROJECT_ID/documents" \
 ```
 
 ### `GET /api/v1/projects/{project_id}/export`
-- **Auth:** `HTTPBearer`
-- **Query Params:** `format` (`json` | `csv`, default `json`), `label`, `document_id`
-- **Status Codes:** `200 OK` (`application/json` or `text/csv` attachment), `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
+
+- Auth: `HTTPBearer`
+- Query params: `format` (`json` or `csv`, default `json`), `label`, `document_id`
+- Status codes: `200` (`application/json` or `text/csv`), `401`, `404`, `422`
 
 ### `PATCH /api/v1/evidence/{evidence_id}`
-- **Auth:** `HTTPBearer`
-- **Purpose:** Override an evidence edge's NLI label (`user_label`) while preserving `model_label` and `model_score`. Pass `null` to restore the model's prediction.
-- **Status Codes:** `200 OK`, `401 Unauthorized`, `404 Not Found`, `422 Unprocessable Entity`
 
-**Sample Request:**
+- Auth: `HTTPBearer`
+- Sets or clears `user_label` (`entailment`, `contradiction`, `neutral`, or `null`) without changing `model_label`.
+- Status codes: `200`, `401`, `404`, `422`
+
+Request:
+
 ```json
 {
   "user_label": "contradiction"
 }
 ```
 
-**Sample Response (`200 OK`):**
+Response (`200 OK`):
+
 ```json
 {
   "id": "e4f2c1a0-8114-4d6b-9f12-2d1d6a1a4e09",

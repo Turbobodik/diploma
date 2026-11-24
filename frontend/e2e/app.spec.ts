@@ -30,6 +30,7 @@ interface MockApiState {
 }
 
 async function setupMockApi(page: Page, state: MockApiState) {
+  await page.route('https://fonts.**', (route) => route.abort());
   await page.route('**/health', async (route) => {
     await route.fulfill({
       status: 200,

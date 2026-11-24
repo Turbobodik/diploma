@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import projectsReducer, {
+  createDemoProject,
   selectFilteredSortedProjects,
   setProjectSearch,
   setProjectSort,
@@ -34,6 +35,7 @@ const BASE_STATE: ProjectsState = {
   total: 3,
   status: 'succeeded',
   creating: false,
+  creatingDemo: false,
   deletingId: null,
   error: null,
   searchQuery: '',
@@ -57,5 +59,25 @@ describe('projectsSlice', () => {
     const ascState = projectsReducer(descState, setProjectSort({ field: 'claim_count' }));
     const ascResult = selectFilteredSortedProjects({ projects: ascState });
     expect(ascResult.map((p) => p.claim_count)).toEqual([4, 10, 42]);
+  });
+
+  it('tracks creatingDemo state and prepends created demo project', () => {
+    const pendingState = projectsReducer(BASE_STATE, createDemoProject.pending('req-1', undefined));
+    expect(pendingState.creatingDemo).toBe(true);
+
+    const demoProject = {
+      id: 'demo-1',
+      name: 'Пример (КиберЛенинка): Удалённая работа и продуктивность',
+      document_count: 2,
+      claim_count: 12,
+      created_at: '2026-11-24T12:00:00+00:00',
+    };
+    const fulfilledState = projectsReducer(
+      pendingState,
+      createDemoProject.fulfilled(demoProject, 'req-1', undefined),
+    );
+    expect(fulfilledState.creatingDemo).toBe(false);
+    expect(fulfilledState.total).toBe(4);
+    expect(fulfilledState.items[0].id).toBe('demo-1');
   });
 });

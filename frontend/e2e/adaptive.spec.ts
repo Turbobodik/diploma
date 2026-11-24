@@ -24,6 +24,7 @@ const PROJECTS = [
 ];
 
 async function mockAuthenticatedApi(page: Page) {
+  await page.route('https://fonts.**', (route) => route.abort());
   await page.addInitScript(() => {
     window.localStorage.setItem('factmap_access_token', 'adaptive-e2e-token');
   });
@@ -78,11 +79,12 @@ test('responsive layout has zero horizontal overflow and keeps main navigation v
   page,
 }) => {
   await mockAuthenticatedApi(page);
+  await page.goto('/projects');
+  await expect(page.getByRole('heading', { name: 'Research Projects' })).toBeVisible();
 
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto('/projects');
-    await expect(page.getByRole('heading', { name: 'Research Projects' })).toBeVisible();
+    await page.waitForTimeout(100);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,

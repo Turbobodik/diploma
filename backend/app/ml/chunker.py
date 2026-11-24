@@ -34,9 +34,19 @@ _ABBREV = {
     "tab",
     "vol",
     "vs",
+    "гг",
+    "доц",
+    "др",
+    "напр",
+    "проф",
+    "рис",
+    "см",
+    "ср",
+    "стр",
+    "табл",
 }
 
-_SENT_BOUNDARY = re.compile(r"([.!?])(?:[\"'”’\)\]]*)(\s+)(?=[A-Z0-9(\[\"'“‘])")
+_SENT_BOUNDARY = re.compile(r"([.!?])(?:[\"'”’»\)\]]*)(\s+)(?=[A-ZА-ЯЁ0-9(\[\"'“‘«])")
 
 
 def _is_abbreviation(text: str, dot_index: int) -> bool:

@@ -1,48 +1,40 @@
-# Getting Started with the FactMap Scholar API
-
-This guide takes you from a clean checkout to your first authenticated API calls in under 5 minutes.
-
----
+# Getting Started
 
 ## 1. Prerequisites
 
-- **Python 3.12+** (or Docker for PostgreSQL 16)
-- `curl` and `jq` (optional, for formatting JSON responses)
+- Python 3.12+ (and Docker if running local PostgreSQL 16)
+- `curl` and `jq`
 
-## 2. Start the Local API Server
+## 2. Run the API locally
 
-You can run the API in **fast local mode** (SQLite + deterministic stub ML — zero external downloads) or **full ML mode** (PostgreSQL 16 + Sentence-Transformers + DeBERTa NLI).
-
-### Option A: Fast Local Mode (Recommended for API Exploration)
+### Fast local mode (SQLite + stub ML)
 
 ```bash
 cd backend
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-ci.txt
 ML_BACKEND=stub .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### Option B: Full PostgreSQL + Transformers ML Mode
+### Full ML mode (PostgreSQL 16 + Transformers)
 
 ```bash
 cd backend
 docker compose up -d
 cp .env.example .env
-# Edit .env and set a random JWT_SECRET (32+ chars)
+# Set a random JWT_SECRET (32+ chars) in .env
 .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch
 .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
----
-
-## 3. Verify Service Health
+## 3. Check `/health`
 
 ```bash
 curl -s http://127.0.0.1:8000/health | jq
 ```
 
-Expected response (`200 OK`):
+Response (`200 OK`):
 
 ```json
 {
@@ -54,9 +46,7 @@ Expected response (`200 OK`):
 }
 ```
 
----
-
-## 4. Register an Account and Obtain a Bearer JWT
+## 4. Register and get a Bearer JWT
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
@@ -68,7 +58,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/auth/register \
   }' | jq
 ```
 
-Expected response (`201 Created`):
+Response (`201 Created`):
 
 ```json
 {
@@ -83,17 +73,13 @@ Expected response (`201 Created`):
 }
 ```
 
-Save the token in an environment variable for subsequent calls:
+Export the token for subsequent requests:
 
 ```bash
-export FACTMAP_TOKEN="<paste-jwt-here>"
+export FACTMAP_TOKEN="<jwt>"
 ```
 
----
-
-## 5. Make Your First Authenticated Request
-
-Create a research project workspace:
+## 5. Create a project
 
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
@@ -102,7 +88,7 @@ curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
   -d '{"name": "SciFact Quickstart"}' | jq
 ```
 
-Expected response (`201 Created`):
+Response (`201 Created`):
 
 ```json
 {
@@ -114,10 +100,7 @@ Expected response (`201 Created`):
 }
 ```
 
----
+## Next steps
 
-## 6. Explore Interactively
-
-- Open **Swagger UI** at `http://127.0.0.1:8000/docs`, click **Authorize**, and paste your JWT token to test any endpoint in the browser.
-- Open **ReDoc** at `http://127.0.0.1:8000/redoc` or the static bundle [`../redoc.html`](../redoc.html).
-- Next step: follow the complete [Step-by-Step Integration Tutorial](integration-tutorial.md) or run [`../examples/walkthrough.sh`](../examples/walkthrough.sh).
+- Interactive docs: `http://127.0.0.1:8000/docs` (click **Authorize** and paste your JWT), `http://127.0.0.1:8000/redoc`, or [`../redoc.html`](../redoc.html).
+- Full workflow: [Integration Tutorial](integration-tutorial.md) or `bash docs/api/examples/walkthrough.sh`.

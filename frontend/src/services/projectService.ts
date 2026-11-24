@@ -19,6 +19,13 @@ export const projectService = {
     return data;
   },
 
+  async createDemoProject(preset?: string): Promise<ProjectItem> {
+    const { data } = await httpClient.post<ProjectItem>('/api/v1/projects/demo', null, {
+      params: preset ? { preset } : undefined,
+    });
+    return data;
+  },
+
   async deleteProject(projectId: string): Promise<DeleteProjectResponse> {
     const { data } = await httpClient.delete<DeleteProjectResponse>(
       `/api/v1/projects/${projectId}`,

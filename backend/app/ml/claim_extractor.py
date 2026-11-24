@@ -13,13 +13,19 @@ if TYPE_CHECKING:
     from app.ml.embedder import Embedder
     from app.ml.nli import NLIClassifier
 
+_WORD_RE = re.compile(r"[A-Za-zА-Яа-яЁё0-9]+")
+
 _REFERENCES_HEADING = re.compile(
-    r"(?:^|\n|\f)[ \t]*(?:\d+\.?\s+)?(?:references|bibliography|acknowledg(?:e)?ments?)[ \t]*(?:\n|\f|$)",
+    r"(?:^|\n|\f)[ \t]*(?:\d+\.?\s+)?(?:references|bibliography|acknowledg(?:e)?ments?|"
+    r"список\s+(?:использованной\s+)?литературы|библиография|литература|благодарности)[ \t]*(?:\n|\f|$)",
     re.IGNORECASE,
 )
 
-_CAPTION_PREFIX = re.compile(r"^(?:fig(?:ure)?|table|algorithm|listing)\s+\d+[:.\-\s]", re.IGNORECASE)
-_CITATION_LINE = re.compile(r"^\[\d+\]\s+|^\d+\.\s+[A-Z][a-z]+,\s+[A-Z]\.")
+_CAPTION_PREFIX = re.compile(
+    r"^(?:fig(?:ure)?|table|algorithm|listing|рис(?:унок|\.)?|табл(?:ица|\.)?)\s+\d+[:.\-\s]",
+    re.IGNORECASE,
+)
+_CITATION_LINE = re.compile(r"^\[\d+\]\s+|^\d+\.\s+[A-ZА-ЯЁ][a-zа-яё]+,\s+[A-ZА-ЯЁ]\.")
 _URL_OR_EMAIL = re.compile(r"(?:https?://|www\.|[\w.+-]+@[\w-]+\.[\w.-]+)", re.IGNORECASE)
 
 _FINDING_VERBS = re.compile(
@@ -33,38 +39,53 @@ _FINDING_VERBS = re.compile(
     r"activate|activates|activation|associated|exceed|exceeds|yield|yields|produce|produces|"
     r"enable|enables|reveal|reveals|revealed|exhibit|exhibits|hallucinate|hallucinates|"
     r"account|accounts|preserve|preserving|eliminate|eliminates|eliminated|fail|fails|failed|"
-    r"treat|treats|link|links|tie|ties|stay|stays|remain|remains|require|requires|required|depend|depends)\b",
+    r"treat|treats|link|links|tie|ties|stay|stays|remain|remains|require|requires|required|depend|depends|"
+    r"показывает|показывают|показал[аои]?|демонстриру(?:ет|ют)|подтвержда(?:ет|ют)|подтвердил[аои]?|"
+    r"опроверга(?:ет|ют)|опроверг(?:ла|ли)?|противореч(?:ит|ат)|повыша(?:ет|ют)|повысил[аои]?|"
+    r"снижа(?:ет|ют)|снизил[аои]?|увеличива(?:ет|ют)|уменьша(?:ет|ют)|улучша(?:ет|ют)|ухудша(?:ет|ют)|"
+    r"привод(?:ит|ят)|вызыва(?:ет|ют)|коррелиру(?:ет|ют)|связан[аоы]?|ускоря(?:ет|ют)|замедля(?:ет|ют)|"
+    r"сокраща(?:ет|ют)|способству(?:ет|ют)|препятству(?:ет|ют)|обеспечива(?:ет|ют)|доказыва(?:ет|ют)|"
+    r"свидетельству(?:ет|ют)|выявлен[аоы]?|установлен[аоы]?|превосход(?:ит|ят)|растёт|растет|падает)\b",
     re.IGNORECASE,
 )
 
 _CONTRAST_OR_NEGATION = re.compile(
     r"\b(?:did not|does not|do not|were not|was not|cannot|no statistically significant|"
-    r"however|in contrast|by contrast|conversely|whereas|unlike)\b",
+    r"however|in contrast|by contrast|conversely|whereas|unlike|"
+    r"однако|напротив|в отличие от|вопреки|отсутству(?:ет|ют)|статистически\s+незначим\w*|"
+    r"не\s+(?:повыша|снижа|увеличива|уменьша|улучша|ухудша|подтвержда|влия|привод|выявлен|обнаружен|наблюда|достига)\w*)\b",
     re.IGNORECASE,
 )
 
 _QUANT_CUES = re.compile(
-    r"(?:\b\d+(?:\.\d+)?\s*%|\b\d+(?:\.\d+)?x\b|\bp\s*[<≤=]\s*0?\.\d+|"
+    r"(?:\b\d+(?:[.,]\d+)?\s*%|\b\d+(?:\.\d+)?x\b|\bв\s+\d+(?:[.,]\d+)?\s+раз\w*|\bp\s*[<≤=]\s*0?[.,]\d+|"
     r"\b(?:f1|accuracy|precision|recall|auc|bleu|rouge|mmhg|latency|throughput)\b|"
-    r"\b(?:higher|lower|faster|slower|better|worse|larger|smaller|significant(?:ly)?|statistically)\b)",
+    r"\b(?:higher|lower|faster|slower|better|worse|larger|smaller|significant(?:ly)?|statistically|"
+    r"выше|ниже|больше|меньше|быстрее|медленнее|значимо|достоверно|статистически|корреляц\w*)\b)",
     re.IGNORECASE,
 )
 
 _META_DISCOURSE = re.compile(
-    r"\b(?:in this (?:paper|section|work|study|chapter) we (?:organize|structure|present an overview|outline|introduce)|"
+    r"(?:\b(?:in this (?:paper|section|work|study|chapter) we (?:organize|structure|present an overview|outline|introduce)|"
     r"the rest of (?:this|the) paper is organized|"
     r"section \d+ (?:discusses|describes|presents|reviews)|"
     r"as shown in (?:fig|figure|table)|"
     r"see appendix|code (?:and weights )?(?:is|are) available at|"
     r"correspondence (?:and reprint requests )?should be addressed|"
-    r"acknowledg(?:e)?ments?:)\b",
+    r"в\s+(?:данной|настоящей)\s+(?:статье|работе)\s+(?:рассматрива|анализиру|представлен|описан)\w*|"
+    r"целью\s+(?:настоящего\s+)?(?:исследования|работы)\s+является|"
+    r"ключевые\s+слова|аннотация)\b|"
+    r"\b(?:acknowledg(?:e)?ments?|источник)\s*:|"
+    r"\bжурнал\s+[«\"'])",
     re.IGNORECASE,
 )
 
 _METHOD_SETUP = re.compile(
     r"\b(?:were recruited|were housed|were collected|were measured|were implemented|"
     r"were exported|were split|were trained on a single|was downloaded|was funded|"
-    r"completed a \d+-week|questionnaire|ad libitum|standard laboratory chow)\b",
+    r"completed a \d+-week|questionnaire|ad libitum|standard laboratory chow|"
+    r"выборка\s+составила|анкетирование\s+проводилось|были\s+опрошены|"
+    r"обработка\s+данных\s+выполнялась|период\s+исследования\s+охватывал)\b",
     re.IGNORECASE,
 )
 
@@ -98,7 +119,7 @@ def _is_candidate_sentence(sentence: str) -> bool:
     stripped = sentence.strip()
     if len(stripped) < 28 or len(stripped) > 600:
         return False
-    words = re.findall(r"[A-Za-z0-9]+", stripped)
+    words = _WORD_RE.findall(stripped)
     if len(words) < 5:
         return False
     if stripped.endswith("?"):
@@ -125,7 +146,7 @@ def _linguistic_score(sentence: str) -> float:
         score += 0.14
     if _QUANT_CUES.search(sentence):
         score += 0.18
-    words = len(re.findall(r"[A-Za-z0-9]+", sentence))
+    words = len(_WORD_RE.findall(sentence))
     if 8 <= words <= 45:
         score += 0.10
     elif words > 65:

@@ -6,17 +6,21 @@ import {
   Moon,
   Network,
   Palette,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings,
   Sun,
   X,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
 import { logout } from '../../store/authSlice';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { setGlobalError, toggleTheme } from '../../store/uiSlice';
 import { Button } from '../common/Button';
+
+const SIDEBAR_STORAGE_KEY = 'factmap_sidebar_collapsed';
 
 export interface AppShellProps {
   children: ReactNode;
@@ -30,6 +34,26 @@ export function AppShell({ children }: AppShellProps) {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+      } catch {
+        // Ignore storage errors in private browsing
+      }
+      return next;
+    });
+  };
+
   const handleLogout = () => {
     dispatch(logout());
     navigate('/login');
@@ -38,12 +62,16 @@ export function AppShell({ children }: AppShellProps) {
   const workspacePath = activeProjectId ? `/projects/${activeProjectId}` : '/projects';
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
 
-      <aside className="app-sidebar" aria-label="Primary navigation">
+      <aside
+        className="app-sidebar"
+        aria-label="Primary navigation"
+        aria-hidden={sidebarCollapsed || undefined}
+      >
         <NavLink to="/projects" className="brand-mark">
           <span className="brand-icon" aria-hidden="true">
             <BookOpen size={18} />
@@ -104,12 +132,40 @@ export function AppShell({ children }: AppShellProps) {
 
       <div className="app-main-column">
         <header className="app-topbar">
-          <NavLink to="/projects" className="brand-mark topbar-brand-mobile">
-            <span className="brand-icon" aria-hidden="true">
-              <BookOpen size={16} />
-            </span>
-            <span className="brand-title">FactMap</span>
-          </NavLink>
+          <div className="cluster">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="sidebar-toggle-desktop"
+              onClick={handleToggleSidebar}
+              aria-label={sidebarCollapsed ? 'Показать боковое меню' : 'Скрыть боковое меню'}
+              aria-expanded={!sidebarCollapsed}
+              id="sidebar-toggle-btn"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen size={17} aria-hidden="true" />
+              ) : (
+                <PanelLeftClose size={17} aria-hidden="true" />
+              )}
+              <span>{sidebarCollapsed ? 'Меню' : 'Скрыть меню'}</span>
+            </Button>
+
+            {sidebarCollapsed ? (
+              <NavLink to="/projects" className="brand-mark topbar-brand-collapsed">
+                <span className="brand-icon" aria-hidden="true">
+                  <BookOpen size={15} />
+                </span>
+                <span className="brand-title">FactMap Scholar</span>
+              </NavLink>
+            ) : null}
+
+            <NavLink to="/projects" className="brand-mark topbar-brand-mobile">
+              <span className="brand-icon" aria-hidden="true">
+                <BookOpen size={16} />
+              </span>
+              <span className="brand-title">FactMap</span>
+            </NavLink>
+          </div>
 
           <div className="topbar-actions">
             <Button

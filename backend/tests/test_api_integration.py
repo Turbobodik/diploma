@@ -273,3 +273,35 @@ def test_rate_limiter_enforces_429(api_client: TestClient, monkeypatch: pytest.M
     assert blocked.status_code == 429
     assert blocked.json()["code"] == "rate_limited"
     assert "Retry-After" in blocked.headers
+
+
+def test_demo_project_launches_russian_cyberleninka_example_with_support_and_contradiction(api_client: TestClient):
+    user = _register(api_client, "demo@ehu.lt", name="Demo User")
+    headers = {"Authorization": f"Bearer {user['token']}"}
+
+    first = api_client.post("/api/v1/projects/demo", headers=headers)
+    assert first.status_code == 201, first.text
+    proj = first.json()
+    assert proj["document_count"] == 2
+    assert proj["claim_count"] >= 4
+    assert "КиберЛенинка" in proj["name"]
+
+    # Calling demo again creates a uniquely numbered copy instead of 409 conflict
+    second = api_client.post("/api/v1/projects/demo", headers=headers)
+    assert second.status_code == 201, second.text
+    assert second.json()["name"].endswith("#2")
+
+    # Graph contains both documents, extracted claims, and both entailment & contradiction edges
+    graph = api_client.get(f"/api/v1/projects/{proj['id']}/graph", headers=headers)
+    assert graph.status_code == 200
+    gdata = graph.json()
+    doc_nodes = [n for n in gdata["nodes"] if n["type"] == "document"]
+    assert len(doc_nodes) == 2
+    evidence_labels = {e["label"] for e in gdata["edges"] if e["kind"] == "evidence"}
+    assert "entailment" in evidence_labels
+    assert "contradiction" in evidence_labels
+
+    # Unknown preset -> 404
+    missing = api_client.post("/api/v1/projects/demo?preset=does-not-exist", headers=headers)
+    assert missing.status_code == 404
+

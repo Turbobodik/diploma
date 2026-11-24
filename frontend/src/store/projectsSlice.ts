@@ -16,6 +16,7 @@ export interface ProjectsState {
   total: number;
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   creating: boolean;
+  creatingDemo: boolean;
   deletingId: string | null;
   error: string | null;
   searchQuery: string;
@@ -28,6 +29,7 @@ const initialState: ProjectsState = {
   total: 0,
   status: 'idle',
   creating: false,
+  creatingDemo: false,
   deletingId: null,
   error: null,
   searchQuery: '',
@@ -65,6 +67,34 @@ export const createProject = createAsyncThunk<
     return created;
   } catch (err) {
     return rejectWithValue(normalizeAxiosError(err).message);
+  }
+});
+
+export const createDemoProject = createAsyncThunk<
+  ProjectItem,
+  string | undefined,
+  { rejectValue: string }
+>('projects/createDemo', async (preset, { dispatch, rejectWithValue }) => {
+  try {
+    const created = await projectService.createDemoProject(preset);
+    dispatch(
+      pushToast({
+        variant: 'success',
+        title: 'Пример создан',
+        description: 'Загружены 2 статьи с КиберЛенинки — открываем карту доказательств.',
+      }),
+    );
+    return created;
+  } catch (err) {
+    const normalized = normalizeAxiosError(err);
+    dispatch(
+      pushToast({
+        variant: 'error',
+        title: 'Не удалось запустить пример',
+        description: normalized.message,
+      }),
+    );
+    return rejectWithValue(normalized.message);
   }
 });
 
@@ -144,6 +174,19 @@ export const projectsSlice = createSlice({
       .addCase(createProject.rejected, (state, action) => {
         state.creating = false;
         state.error = action.payload ?? 'Failed to create project.';
+      })
+      .addCase(createDemoProject.pending, (state) => {
+        state.creatingDemo = true;
+        state.error = null;
+      })
+      .addCase(createDemoProject.fulfilled, (state, action) => {
+        state.creatingDemo = false;
+        state.items.unshift(action.payload);
+        state.total += 1;
+      })
+      .addCase(createDemoProject.rejected, (state, action) => {
+        state.creatingDemo = false;
+        state.error = action.payload ?? 'Failed to launch demo project.';
       })
       .addCase(deleteProject.pending, (state, action) => {
         state.deletingId = action.meta.arg;

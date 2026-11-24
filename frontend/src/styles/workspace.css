@@ -67,12 +67,52 @@
   display: none;
 }
 
-/* Workspace Layout */
-.workspace-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+/* Workspace Layout — full-width Evidence Map with Claim Inspector overlay */
+.workspace-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-stage-main {
+  width: 100%;
+  min-width: 0;
+}
+
+.inspector-overlay {
+  position: absolute;
+  top: 4rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: min(26rem, calc(100% - 1.5rem));
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+.inspector-overlay .inspector-drawer-card {
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-surface);
+}
+
+.inspector-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.inspector-reopen-btn {
+  position: absolute;
+  top: 4.1rem;
+  right: 0.9rem;
+  z-index: 24;
+  box-shadow: var(--shadow-sm);
 }
 
 /* Document Dropzone */
@@ -152,11 +192,34 @@
 
 .graph-viewport {
   width: 100%;
-  height: clamp(22rem, 48vh, 34rem);
+  height: clamp(30rem, 64vh, 46rem);
   overflow: hidden;
   cursor: grab;
   touch-action: none;
   background: var(--bg-surface);
+}
+
+.graph-summary-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.graph-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--radius-pill);
+}
+
+.graph-pill-contradiction {
+  color: var(--nli-contradiction);
+  background: var(--nli-contradiction-bg);
+}
+
+.graph-pill-entailment {
+  color: var(--nli-entailment);
+  background: var(--nli-entailment-bg);
 }
 
 .graph-viewport:active {
@@ -234,17 +297,98 @@
   gap: var(--space-3);
   padding: var(--space-4);
   border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.evidence-item-entailment {
+  border-left-color: var(--nli-entailment);
+}
+
+.evidence-item-contradiction {
+  border-left-color: var(--nli-contradiction);
+}
+
+.evidence-item-neutral {
+  border-left-color: var(--nli-neutral);
+}
+
+.evidence-item-focused {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-soft);
 }
 
 .evidence-excerpt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   font-size: 0.9rem;
-  line-height: 1.55;
+  line-height: 1.6;
   color: var(--text-secondary);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
+}
+
+.evidence-excerpt-text {
+  margin: 0;
+}
+
+.evidence-key-sentence {
+  color: var(--text-primary);
+  font-weight: 500;
+  padding: 0.1rem 0.25rem;
+  border-radius: var(--radius-sm);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.evidence-key-sentence.is-entailment {
+  background: var(--nli-entailment-bg);
+}
+
+.evidence-key-sentence.is-contradiction {
+  background: var(--nli-contradiction-bg);
+}
+
+.evidence-key-sentence.is-neutral {
+  background: var(--nli-neutral-bg);
+}
+
+.evidence-keyword {
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+.evidence-toggle-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--bg-surface);
+  color: var(--accent-primary-text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.evidence-toggle-btn:hover {
+  background: var(--accent-primary-soft);
+  border-color: var(--accent-primary);
 }
 
 .claim-row-selected {
@@ -291,8 +435,17 @@
     padding: var(--space-6) var(--space-4);
   }
 
-  .workspace-split {
-    grid-template-columns: 1fr;
+  .inspector-overlay {
+    top: 4.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: auto;
+  }
+
+  .inspector-reopen-btn {
+    top: 4.6rem;
+    right: 0.6rem;
   }
 }
 
