@@ -2,8 +2,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Focus,
+  LayoutGrid,
   Maximize2,
   Network,
+  Scale,
+  Sparkles,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
@@ -11,8 +14,20 @@ import { memo, useMemo, useRef, useState, type PointerEvent, type WheelEvent } f
 
 import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
-import type { GraphEdge, GraphNode, GraphResponse, NliLabel } from '../../models/api';
-import { extractKeySentence, labelRank, wrapSvgLines } from '../../utils/evidenceHighlight';
+import type { GraphNode, GraphResponse } from '../../models/api';
+import { extractKeySentence, wrapSvgLines } from '../../utils/evidenceHighlight';
+import {
+  computeBalanceLayout,
+  computeClustersLayout,
+  computeConstellationLayout,
+  labelColor,
+  shortVerdictEdgeLabel,
+  verdictBg,
+  verdictColor,
+  verdictText,
+  type LayoutZone,
+  type MapLayoutMode,
+} from './evidenceMapLayouts';
 
 export interface EvidenceMapProps {
   graph: GraphResponse | null;
@@ -22,176 +37,34 @@ export interface EvidenceMapProps {
   onSelectPassage?: (passageId: string) => void;
 }
 
-interface PositionedNode {
-  node: GraphNode;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4.0;
 const AUTO_FOCUS_THRESHOLD = 24;
 
-function edgeColor(edge: GraphEdge): string {
-  if (edge.kind === 'extracted_from') return 'var(--border-strong)';
-  const label: NliLabel = edge.label ?? 'neutral';
-  if (label === 'entailment') return 'var(--nli-entailment)';
-  if (label === 'contradiction') return 'var(--nli-contradiction)';
-  return 'var(--nli-neutral)';
-}
-
-function labelColor(label: NliLabel | null | undefined): string {
-  if (label === 'entailment') return 'var(--nli-entailment)';
-  if (label === 'contradiction') return 'var(--nli-contradiction)';
-  return 'var(--nli-neutral)';
-}
-
-function shortLabel(label: NliLabel | null | undefined): string {
-  if (label === 'entailment') return 'supports';
-  if (label === 'contradiction') return 'refutes';
-  return 'neutral';
-}
-
-function shortFilename(name: string, maxLen = 22): string {
+function shortFilename(name: string, maxLen = 26): string {
   if (name.length <= maxLen) return name;
   return `${name.slice(0, maxLen - 1)}…`;
 }
 
-function cubicBezierPoint(
-  x1: number,
-  y1: number,
-  cx1: number,
-  cy1: number,
-  cx2: number,
-  cy2: number,
-  x2: number,
-  y2: number,
-  t: number,
-): { x: number; y: number } {
-  const mt = 1 - t;
-  const x = mt ** 3 * x1 + 3 * mt ** 2 * t * cx1 + 3 * mt * t ** 2 * cx2 + t ** 3 * x2;
-  const y = mt ** 3 * y1 + 3 * mt ** 2 * t * cy1 + 3 * mt * t ** 2 * cy2 + t ** 3 * y2;
-  return { x, y };
-}
-
-function filterFocusedSubgraph(
-  graph: GraphResponse,
-  selectedClaimId: string | null,
-): GraphResponse {
-  const claims = graph.nodes.filter((n) => n.type === 'claim');
-  const activeClaimNodeId =
-    selectedClaimId && claims.some((c) => c.id === `claim:${selectedClaimId}`)
-      ? `claim:${selectedClaimId}`
-      : claims[0]?.id;
-
-  if (!activeClaimNodeId) {
-    return graph;
+function zoneColors(tone: LayoutZone['tone']): { bg: string; border: string; title: string } {
+  if (tone === 'contradiction') {
+    return {
+      bg: 'var(--nli-contradiction-bg)',
+      border: 'var(--nli-contradiction)',
+      title: 'var(--nli-contradiction)',
+    };
   }
-
-  const keepEdges = graph.edges.filter(
-    (e) => e.source === activeClaimNodeId || e.target === activeClaimNodeId,
-  );
-  const keepNodeIds = new Set<string>([activeClaimNodeId]);
-  for (const edge of keepEdges) {
-    keepNodeIds.add(edge.source);
-    keepNodeIds.add(edge.target);
+  if (tone === 'entailment') {
+    return {
+      bg: 'var(--nli-entailment-bg)',
+      border: 'var(--nli-entailment)',
+      title: 'var(--nli-entailment)',
+    };
   }
-
-  // Sort evidence passages by verdict importance (contradiction -> entailment -> neutral), then score desc
-  const edgeByPassage = new Map<string, GraphEdge>();
-  for (const edge of keepEdges) {
-    if (edge.kind !== 'evidence') continue;
-    const passageNodeId = edge.source.startsWith('passage:') ? edge.source : edge.target;
-    edgeByPassage.set(passageNodeId, edge);
-  }
-
-  const keptNodes = graph.nodes.filter((n) => keepNodeIds.has(n.id));
-  const docs = keptNodes.filter((n) => n.type === 'document');
-  const claimNodes = keptNodes.filter((n) => n.type === 'claim');
-  const passages = keptNodes
-    .filter((n) => n.type === 'passage')
-    .sort((a, b) => {
-      const ea = edgeByPassage.get(a.id);
-      const eb = edgeByPassage.get(b.id);
-      const rankDiff = labelRank(ea?.label) - labelRank(eb?.label);
-      if (rankDiff !== 0) return rankDiff;
-      return (eb?.score ?? 0) - (ea?.score ?? 0);
-    });
-
   return {
-    project_id: graph.project_id,
-    nodes: [...docs, ...claimNodes, ...passages],
-    edges: keepEdges,
-  };
-}
-
-function computeLayout(
-  graph: GraphResponse,
-  focused: boolean,
-): {
-  positioned: PositionedNode[];
-  byId: Map<string, PositionedNode>;
-  canvasWidth: number;
-  canvasHeight: number;
-} {
-  const docs = graph.nodes.filter((n) => n.type === 'document');
-  const claims = graph.nodes.filter((n) => n.type === 'claim');
-  const passages = graph.nodes.filter((n) => n.type === 'passage');
-
-  const positioned: PositionedNode[] = [];
-  const colX = { document: 14, claim: 174, passage: 516 };
-  const colW = { document: 136, claim: 224, passage: 244 };
-
-  const docH = focused ? 76 : 64;
-  const claimH = focused ? 132 : 84;
-  const passageH = focused ? 104 : 82;
-  const docGap = 18;
-  const claimGap = 16;
-  const passageGap = 14;
-
-  const stackHeight = (count: number, h: number, gap: number) =>
-    count > 0 ? count * h + Math.max(0, count - 1) * gap : 0;
-
-  const passagesTotalH = stackHeight(passages.length, passageH, passageGap);
-  const claimsTotalH = stackHeight(claims.length, claimH, claimGap);
-  const docsTotalH = stackHeight(docs.length, docH, docGap);
-  const maxColH = Math.max(passagesTotalH, claimsTotalH, docsTotalH, 260);
-
-  const placeColumn = (
-    nodes: GraphNode[],
-    x: number,
-    width: number,
-    height: number,
-    gap: number,
-    centerVertically: boolean,
-  ) => {
-    const colH = stackHeight(nodes.length, height, gap);
-    const startY = centerVertically ? 46 + Math.max(0, Math.round((maxColH - colH) / 2)) : 46;
-    nodes.forEach((node, idx) => {
-      positioned.push({
-        node,
-        x,
-        y: startY + idx * (height + gap),
-        width,
-        height,
-      });
-    });
-  };
-
-  placeColumn(docs, colX.document, colW.document, docH, docGap, focused);
-  placeColumn(claims, colX.claim, colW.claim, claimH, claimGap, focused);
-  placeColumn(passages, colX.passage, colW.passage, passageH, passageGap, false);
-
-  const maxY = positioned.reduce((acc, item) => Math.max(acc, item.y + item.height), 340);
-  const byId = new Map(positioned.map((item) => [item.node.id, item]));
-
-  return {
-    positioned,
-    byId,
-    canvasWidth: 774,
-    canvasHeight: Math.max(400, maxY + 36),
+    bg: 'var(--bg-subtle)',
+    border: 'var(--border-strong)',
+    title: 'var(--text-muted)',
   };
 }
 
@@ -205,6 +78,13 @@ export const EvidenceMap = memo(function EvidenceMap({
   const isLargeGraph = (graph?.nodes.length ?? 0) > AUTO_FOCUS_THRESHOLD;
   const [focusOverride, setFocusOverride] = useState<boolean | null>(null);
   const focusSelected = focusOverride ?? isLargeGraph;
+
+  const [layoutOverride, setLayoutOverride] = useState<MapLayoutMode | null>(null);
+  const layoutMode: MapLayoutMode = layoutOverride ?? (focusSelected ? 'balance' : 'clusters');
+
+  const [showUnverified, setShowUnverified] = useState(false);
+  const [hoveredEdgeKey, setHoveredEdgeKey] = useState<string | null>(null);
+  const [hoveredCardKey, setHoveredCardKey] = useState<string | null>(null);
 
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -224,75 +104,28 @@ export const EvidenceMap = memo(function EvidenceMap({
       ? selectedClaimId
       : (allClaimIds[0] ?? null);
 
-  const docNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    if (!graph) return map;
-    for (const n of graph.nodes) {
-      if (n.type === 'document' && n.document_id) {
-        map.set(n.document_id, n.label);
-      }
-    }
-    return map;
+  const activeClaimNodeId = effectiveClaimId ? `claim:${effectiveClaimId}` : null;
+
+  const unverifiedCount = useMemo(() => {
+    if (!graph) return 0;
+    return graph.nodes.filter((n) => n.type === 'claim' && n.has_evidence === false).length;
   }, [graph]);
 
-  const visibleGraph = useMemo(() => {
-    if (!graph) return null;
-    if (focusSelected && effectiveClaimId) {
-      return filterFocusedSubgraph(graph, effectiveClaimId);
+  const effectiveShowUnverified =
+    showUnverified || (allClaimIds.length > 0 && unverifiedCount === allClaimIds.length);
+
+  const layout = useMemo(() => {
+    if (!graph || graph.nodes.length === 0) return null;
+    if (layoutMode === 'balance') {
+      return computeBalanceLayout(graph, activeClaimNodeId);
     }
-    return graph;
-  }, [graph, focusSelected, effectiveClaimId]);
-
-  const layout = useMemo(
-    () => (visibleGraph ? computeLayout(visibleGraph, focusSelected) : null),
-    [visibleGraph, focusSelected],
-  );
-
-  const activeClaimNodeId = effectiveClaimId ? `claim:${effectiveClaimId}` : null;
-  const activeClaimNode = useMemo(
-    () => (graph && activeClaimNodeId ? graph.nodes.find((n) => n.id === activeClaimNodeId) : null),
-    [graph, activeClaimNodeId],
-  );
-
-  const activePassageEdgeMap = useMemo(() => {
-    const map = new Map<string, GraphEdge>();
-    if (!visibleGraph || !activeClaimNodeId) return map;
-    for (const e of visibleGraph.edges) {
-      if (e.kind !== 'evidence') continue;
-      if (e.source === activeClaimNodeId || e.target === activeClaimNodeId) {
-        const pId = e.source.startsWith('passage:') ? e.source : e.target;
-        map.set(pId, e);
-      }
+    if (layoutMode === 'constellation') {
+      return computeConstellationLayout(graph, { showUnverified: effectiveShowUnverified });
     }
-    return map;
-  }, [visibleGraph, activeClaimNodeId]);
+    return computeClustersLayout(graph, { showUnverified: effectiveShowUnverified });
+  }, [graph, layoutMode, activeClaimNodeId, effectiveShowUnverified]);
 
-  const connectedNodeIds = useMemo(() => {
-    const set = new Set<string>();
-    if (!visibleGraph || !activeClaimNodeId) return set;
-    set.add(activeClaimNodeId);
-    for (const e of visibleGraph.edges) {
-      if (e.source === activeClaimNodeId || e.target === activeClaimNodeId) {
-        set.add(e.source);
-        set.add(e.target);
-      }
-    }
-    return set;
-  }, [visibleGraph, activeClaimNodeId]);
-
-  const activeVerdictSummary = useMemo(() => {
-    let refutes = 0;
-    let supports = 0;
-    let neutral = 0;
-    for (const edge of activePassageEdgeMap.values()) {
-      if (edge.label === 'contradiction') refutes += 1;
-      else if (edge.label === 'entailment') supports += 1;
-      else neutral += 1;
-    }
-    return { refutes, supports, neutral };
-  }, [activePassageEdgeMap]);
-
-  if (!graph || graph.nodes.length === 0 || !visibleGraph || !layout) {
+  if (!graph || graph.nodes.length === 0 || !layout) {
     return (
       <EmptyState
         icon={<Network size={22} />}
@@ -303,7 +136,6 @@ export const EvidenceMap = memo(function EvidenceMap({
   }
 
   const activeClaimIdx = effectiveClaimId ? allClaimIds.indexOf(effectiveClaimId) : -1;
-  const showAllEdgeLabels = visibleGraph.edges.filter((e) => e.kind === 'evidence').length <= 12;
 
   const clampZoom = (next: number) =>
     Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2))));
@@ -330,6 +162,13 @@ export const EvidenceMap = memo(function EvidenceMap({
     setPan({ x: offsetX, y: 10 });
   };
 
+  const handleSelectLayout = (next: MapLayoutMode) => {
+    setLayoutOverride(next);
+    setFocusOverride(next === 'balance');
+    setPan({ x: 0, y: 0 });
+    setZoom(1);
+  };
+
   const handleStepClaim = (delta: -1 | 1) => {
     if (allClaimIds.length === 0) return;
     const nextIdx = (Math.max(0, activeClaimIdx) + delta + allClaimIds.length) % allClaimIds.length;
@@ -339,7 +178,7 @@ export const EvidenceMap = memo(function EvidenceMap({
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey || focusSelected) {
+    if (event.ctrlKey || event.metaKey || layoutMode === 'balance') {
       const delta = event.deltaY < 0 ? 0.15 : -0.15;
       setZoom((z) => clampZoom(z + delta));
     } else {
@@ -351,7 +190,7 @@ export const EvidenceMap = memo(function EvidenceMap({
   };
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('.graph-node')) return;
+    if ((event.target as HTMLElement).closest('.graph-node, .graph-edge-hit')) return;
     dragOrigin.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
   };
 
@@ -366,75 +205,71 @@ export const EvidenceMap = memo(function EvidenceMap({
     dragOrigin.current = null;
   };
 
-  const handleNodeActivate = (node: GraphNode) => {
+  const handleNodeActivate = (node: GraphNode, claimNodeId?: string | null) => {
     if (node.type === 'claim') {
       onSelectClaim(node.id.replace(/^claim:/, ''));
       return;
     }
     if (node.type === 'passage') {
       const rawPassageId = node.id.replace(/^passage:/, '');
-      const linkedToActive = visibleGraph.edges.some(
-        (e) =>
-          (e.source === node.id && e.target === activeClaimNodeId) ||
-          (e.target === node.id && e.source === activeClaimNodeId),
-      );
-      if (!linkedToActive) {
+      if (claimNodeId) {
+        onSelectClaim(claimNodeId.replace(/^claim:/, ''));
+      } else {
         const linked = graph.edges.find(
           (e) =>
             (e.target === node.id && e.source.startsWith('claim:')) ||
             (e.source === node.id && e.target.startsWith('claim:')),
         );
         if (linked) {
-          const claimId = (
-            linked.source.startsWith('claim:') ? linked.source : linked.target
-          ).replace(/^claim:/, '');
-          onSelectClaim(claimId);
+          const cid = (linked.source.startsWith('claim:') ? linked.source : linked.target).replace(
+            /^claim:/,
+            '',
+          );
+          onSelectClaim(cid);
         }
       }
       onSelectPassage?.(rawPassageId);
     }
   };
 
-  // Precompute normalized left->right edge geometries and label positions
-  const renderedEdges = visibleGraph.edges
-    .map((edge) => {
-      const src = layout.byId.get(edge.source);
-      const tgt = layout.byId.get(edge.target);
-      if (!src || !tgt) return null;
+  const isEdgeHighlighted = (item: (typeof layout.edges)[number]): boolean => {
+    if (hoveredEdgeKey) return item.key === hoveredEdgeKey;
+    if (hoveredCardKey) {
+      return item.sourceKey === hoveredCardKey || item.targetKey === hoveredCardKey;
+    }
+    if (layoutMode === 'balance') return true;
+    return Boolean(activeClaimNodeId && item.claimNodeId === activeClaimNodeId);
+  };
 
-      // Always connect left node's right edge -> right node's left edge
-      const [left, right] = src.x <= tgt.x ? [src, tgt] : [tgt, src];
-      const x1 = left.x + left.width;
-      const y1 = left.y + left.height / 2;
-      const x2 = right.x;
-      const y2 = right.y + right.height / 2;
-      const midX = (x1 + x2) / 2;
-      const path = `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`;
-
-      const isHighlighted =
-        !activeClaimNodeId ||
-        edge.source === activeClaimNodeId ||
-        edge.target === activeClaimNodeId;
-      const color = edgeColor(edge);
-      const showLabel =
-        edge.kind === 'evidence' && Boolean(edge.label) && (showAllEdgeLabels || isHighlighted);
-
-      // Position verdict pill near t=0.68 in the open gutter so fanned-out edges never collide
-      const pillPoint = cubicBezierPoint(
-        x1,
-        y1,
-        midX,
-        y1,
-        midX,
-        y2,
-        x2,
-        y2,
-        focusSelected ? 0.68 : 0.52,
+  const isCardActive = (card: (typeof layout.cards)[number]): boolean => {
+    if (hoveredCardKey) {
+      if (card.key === hoveredCardKey) return true;
+      return layout.edges.some(
+        (e) =>
+          (e.sourceKey === hoveredCardKey && e.targetKey === card.key) ||
+          (e.targetKey === hoveredCardKey && e.sourceKey === card.key),
       );
+    }
+    if (hoveredEdgeKey) {
+      const edge = layout.edges.find((e) => e.key === hoveredEdgeKey);
+      return Boolean(edge && (edge.sourceKey === card.key || edge.targetKey === card.key));
+    }
+    if (layoutMode === 'balance') return true;
+    if (!activeClaimNodeId) return true;
+    if (card.node.id === activeClaimNodeId) return true;
+    return layout.edges.some(
+      (e) =>
+        e.claimNodeId === activeClaimNodeId &&
+        (e.sourceKey === card.key || e.targetKey === card.key),
+    );
+  };
 
-      return { edge, path, color, isHighlighted, showLabel, pillX: midX, pillY: pillPoint.y };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  // Render non-highlighted edge pills first, highlighted pills strictly on top
+  const evidenceEdges = layout.edges.filter(
+    (item) => item.edge.kind === 'evidence' && Boolean(item.edge.label),
+  );
+  const dimPills = evidenceEdges.filter((item) => !isEdgeHighlighted(item));
+  const brightPills = evidenceEdges.filter((item) => isEdgeHighlighted(item));
 
   return (
     <section className="graph-container" aria-label="Interactive evidence map">
@@ -442,35 +277,69 @@ export const EvidenceMap = memo(function EvidenceMap({
         <div className="cluster">
           <strong>Evidence Map</strong>
           <span className="text-muted">
-            {focusSelected
-              ? `Claim ${activeClaimIdx + 1}/${allClaimIds.length} · ${visibleGraph.nodes.length} of ${graph.nodes.length} nodes`
+            {layoutMode === 'balance'
+              ? `Claim ${activeClaimIdx + 1}/${allClaimIds.length}`
               : `${graph.nodes.length} nodes · ${graph.edges.length} edges`}
           </span>
-          {focusSelected &&
-          (activeVerdictSummary.refutes > 0 || activeVerdictSummary.supports > 0) ? (
-            <span className="graph-summary-pills">
-              {activeVerdictSummary.refutes > 0 ? (
-                <span className="graph-pill graph-pill-contradiction">
-                  {activeVerdictSummary.refutes} refutes
-                </span>
-              ) : null}
-              {activeVerdictSummary.supports > 0 ? (
-                <span className="graph-pill graph-pill-entailment">
-                  {activeVerdictSummary.supports} supports
-                </span>
-              ) : null}
-            </span>
-          ) : null}
+
+          <div className="graph-mode-switcher" role="group" aria-label="Evidence map layout mode">
+            <button
+              type="button"
+              className={`graph-mode-btn${layoutMode === 'clusters' ? ' is-active' : ''}`}
+              aria-pressed={layoutMode === 'clusters'}
+              onClick={() => handleSelectLayout('clusters')}
+              id="graph-mode-clusters"
+            >
+              <LayoutGrid size={14} aria-hidden="true" />
+              Острова
+            </button>
+            <button
+              type="button"
+              className={`graph-mode-btn${layoutMode === 'balance' ? ' is-active' : ''}`}
+              aria-pressed={layoutMode === 'balance'}
+              onClick={() => handleSelectLayout('balance')}
+              id="graph-mode-balance"
+            >
+              <Scale size={14} aria-hidden="true" />
+              Весы
+            </button>
+            <button
+              type="button"
+              className={`graph-mode-btn${layoutMode === 'constellation' ? ' is-active' : ''}`}
+              aria-pressed={layoutMode === 'constellation'}
+              onClick={() => handleSelectLayout('constellation')}
+              id="graph-mode-constellation"
+            >
+              <Sparkles size={14} aria-hidden="true" />
+              Созвездие
+            </button>
+          </div>
         </div>
 
         <div className="cluster">
+          {layoutMode !== 'balance' &&
+          unverifiedCount > 0 &&
+          unverifiedCount < allClaimIds.length ? (
+            <Button
+              variant={showUnverified ? 'primary' : 'secondary'}
+              size="sm"
+              onClick={() => setShowUnverified((prev) => !prev)}
+              aria-pressed={showUnverified}
+              id="graph-toggle-unverified"
+            >
+              Без доказательств ({unverifiedCount})
+            </Button>
+          ) : null}
+
           {allClaimIds.length > 1 ? (
             <>
               <Button
                 variant={focusSelected ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => {
-                  setFocusOverride(!focusSelected);
+                  const nextFocused = !focusSelected;
+                  setFocusOverride(nextFocused);
+                  setLayoutOverride(nextFocused ? 'balance' : 'clusters');
                   setPan({ x: 0, y: 0 });
                   setZoom(1);
                 }}
@@ -559,106 +428,205 @@ export const EvidenceMap = memo(function EvidenceMap({
           aria-label="Graph connecting source documents, extracted claims, and NLI-verified passages"
         >
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            <text x={14} y={24} fill="var(--text-muted)" fontSize="11" fontWeight="700">
-              SOURCE DOC
-            </text>
-            <text x={188} y={24} fill="var(--text-muted)" fontSize="11" fontWeight="700">
-              {focusSelected ? 'SELECTED CLAIM' : 'EXTRACTED CLAIMS'}
-            </text>
-            <text x={544} y={24} fill="var(--text-muted)" fontSize="11" fontWeight="700">
-              EVIDENCE PASSAGES (BY PRIORITY)
-            </text>
+            {/* Layer 0: Semantic verdict backdrop zones */}
+            {layout.zones.map((zone) => {
+              const palette = zoneColors(zone.tone);
+              return (
+                <g key={zone.id}>
+                  <rect
+                    x={zone.x}
+                    y={zone.y}
+                    width={zone.width}
+                    height={zone.height}
+                    rx={14}
+                    fill={palette.bg}
+                    fillOpacity={zone.tone === 'neutral' ? 0.55 : 0.35}
+                    stroke={palette.border}
+                    strokeOpacity={0.35}
+                    strokeWidth={1.2}
+                  />
+                  <text
+                    x={zone.x + 16}
+                    y={zone.y + 22}
+                    fill={palette.title}
+                    fontSize="11"
+                    fontWeight="800"
+                    letterSpacing="0.04em"
+                  >
+                    {zone.title}
+                  </text>
+                  {zone.subtitle ? (
+                    <text
+                      x={zone.x + 16}
+                      y={zone.y + 37}
+                      fill="var(--text-muted)"
+                      fontSize="10.5"
+                      fontWeight="500"
+                    >
+                      {zone.subtitle}
+                    </text>
+                  ) : null}
+                </g>
+              );
+            })}
 
-            {/* Layer 1: Edge paths */}
-            {renderedEdges.map(({ edge, path, color, isHighlighted }) => (
-              <path
-                key={edge.id}
-                d={path}
-                fill="none"
-                stroke={color}
-                strokeWidth={
-                  edge.kind === 'evidence'
-                    ? isHighlighted
-                      ? edge.label === 'neutral'
-                        ? 1.8
-                        : 2.8
-                      : 1.1
-                    : 1.4
-                }
-                strokeDasharray={edge.kind === 'extracted_from' ? '4 4' : undefined}
-                opacity={
-                  isHighlighted
-                    ? edge.kind === 'evidence'
-                      ? edge.label === 'neutral'
-                        ? 0.55
-                        : 0.95
-                      : 0.75
-                    : 0.12
-                }
-              />
-            ))}
+            {/* Layer 1: Edge curves (hoverable & clickable) */}
+            {layout.edges.map((item) => {
+              const highlighted = isEdgeHighlighted(item);
+              const isHovered = hoveredEdgeKey === item.key;
+              return (
+                <g
+                  key={item.key}
+                  className="graph-edge-hit"
+                  onMouseEnter={() => setHoveredEdgeKey(item.key)}
+                  onMouseLeave={() => setHoveredEdgeKey(null)}
+                  onClick={() => {
+                    if (item.claimNodeId) {
+                      onSelectClaim(item.claimNodeId.replace(/^claim:/, ''));
+                    }
+                    if (item.passageNodeId) {
+                      onSelectPassage?.(item.passageNodeId.replace(/^passage:/, ''));
+                    }
+                  }}
+                >
+                  {/* Invisible wider hit target for effortless edge hover */}
+                  <path d={item.path} fill="none" stroke="transparent" strokeWidth={14} />
+                  <path
+                    d={item.path}
+                    fill="none"
+                    stroke={item.color}
+                    strokeWidth={
+                      item.edge.kind === 'evidence'
+                        ? isHovered
+                          ? 4
+                          : highlighted
+                            ? item.edge.label === 'neutral'
+                              ? 2
+                              : 3
+                            : 1.3
+                        : 1.4
+                    }
+                    strokeDasharray={item.edge.kind === 'extracted_from' ? '4 4' : undefined}
+                    opacity={
+                      highlighted
+                        ? item.edge.kind === 'evidence'
+                          ? item.edge.label === 'neutral'
+                            ? 0.72
+                            : 1
+                          : 0.75
+                        : 0.16
+                    }
+                  />
+                </g>
+              );
+            })}
 
-            {/* Layer 2: Node cards */}
-            {layout.positioned.map(({ node, x, y, width, height }) => {
+            {/* Layer 2: Dimmed edge pills (behind cards/highlighted pills so zero visual clash) */}
+            {dimPills.map((item) => {
+              const pillText = `${shortVerdictEdgeLabel(item.edge.label)}${
+                typeof item.edge.score === 'number' ? ` ${Math.round(item.edge.score * 100)}%` : ''
+              }`;
+              const pillW = Math.max(96, pillText.length * 6.4 + 16);
+              return (
+                <g
+                  key={`dim-pill:${item.key}`}
+                  className="graph-edge-hit"
+                  opacity={0.28}
+                  onMouseEnter={() => setHoveredEdgeKey(item.key)}
+                  onMouseLeave={() => setHoveredEdgeKey(null)}
+                  onClick={() => {
+                    if (item.claimNodeId) onSelectClaim(item.claimNodeId.replace(/^claim:/, ''));
+                    if (item.passageNodeId) {
+                      onSelectPassage?.(item.passageNodeId.replace(/^passage:/, ''));
+                    }
+                  }}
+                >
+                  <rect
+                    x={item.pillX - pillW / 2}
+                    y={item.pillY - 10}
+                    width={pillW}
+                    height={20}
+                    rx={10}
+                    fill="var(--bg-surface)"
+                    stroke={item.color}
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={item.pillX}
+                    y={item.pillY + 3.5}
+                    textAnchor="middle"
+                    fontSize="9.5"
+                    fontWeight="600"
+                    fill={item.color}
+                  >
+                    {pillText}
+                  </text>
+                </g>
+              );
+            })}
+
+            {/* Layer 3: Node cards */}
+            {layout.cards.map((card) => {
+              const { node, x, y, width, height } = card;
               const isSelectedClaim = node.type === 'claim' && node.id === activeClaimNodeId;
               const isSelectedPassage =
                 node.type === 'passage' &&
                 selectedPassageId !== null &&
                 node.id === `passage:${selectedPassageId}`;
-              const isConnected =
-                focusSelected || !activeClaimNodeId || connectedNodeIds.has(node.id);
-              const linkedEdge =
-                node.type === 'passage' ? activePassageEdgeMap.get(node.id) : undefined;
-              const accentColor =
-                node.type === 'passage' && linkedEdge ? labelColor(linkedEdge.label) : null;
+              const active = isCardActive(card);
 
-              const isCrossDoc =
-                node.type === 'passage' &&
-                Boolean(node.document_id && activeClaimNode?.document_id) &&
-                node.document_id !== activeClaimNode?.document_id;
+              const accent =
+                node.type === 'claim' && card.verdict
+                  ? verdictColor(card.verdict)
+                  : node.type === 'passage' && card.linkedEdge
+                    ? labelColor(card.linkedEdge.label)
+                    : null;
 
-              const passageSourceName = node.document_id
-                ? docNameById.get(node.document_id)
-                : undefined;
+              const fill =
+                isSelectedClaim || isSelectedPassage
+                  ? 'var(--accent-primary-soft)'
+                  : node.type === 'claim' && card.verdict && card.verdict !== 'unverified'
+                    ? verdictBg(card.verdict)
+                    : 'var(--bg-elevated)';
+
+              const stroke =
+                isSelectedClaim || isSelectedPassage
+                  ? 'var(--accent-primary)'
+                  : (accent ?? 'var(--border-strong)');
 
               let displayText = node.label;
-              if (node.type === 'passage' && activeClaimNode) {
+              if (node.type === 'passage' && card.claimTextForSnippet) {
                 displayText = extractKeySentence(
                   node.label,
-                  activeClaimNode.label,
-                  linkedEdge?.label,
+                  card.claimTextForSnippet,
+                  card.linkedEdge?.label,
                 ).keySentence;
               }
 
-              const bodyLines =
-                node.type === 'document'
-                  ? wrapSvgLines(displayText, 16, 2)
-                  : node.type === 'claim'
-                    ? wrapSvgLines(displayText, 28, focusSelected ? 4 : 2)
-                    : wrapSvgLines(displayText, 31, focusSelected ? 3 : 2);
+              const charsPerLine = Math.max(16, Math.floor((width - 26) / 6.7));
+              const maxLines = card.compact ? 2 : height >= 120 ? 4 : 3;
+              const bodyLines = wrapSvgLines(displayText, charsPerLine, maxLines);
 
-              const strokeColor =
-                isSelectedClaim || isSelectedPassage
-                  ? 'var(--accent-primary)'
-                  : node.type === 'claim' && node.has_evidence === false
-                    ? 'var(--status-warning)'
-                    : accentColor && linkedEdge?.label !== 'neutral'
-                      ? accentColor
-                      : 'var(--border-strong)';
+              const linkedClaimId =
+                node.type === 'passage'
+                  ? (layout.edges.find((e) => e.targetKey === card.key)?.claimNodeId ?? null)
+                  : null;
 
               return (
                 <g
-                  key={node.id}
+                  key={card.key}
                   className="graph-node"
-                  opacity={isConnected ? 1 : 0.32}
+                  opacity={active ? 1 : 0.34}
                   tabIndex={0}
                   role="button"
                   aria-label={`${node.type}: ${node.label}`}
-                  onClick={() => handleNodeActivate(node)}
+                  onMouseEnter={() => setHoveredCardKey(card.key)}
+                  onMouseLeave={() => setHoveredCardKey(null)}
+                  onClick={() => handleNodeActivate(node, linkedClaimId)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      handleNodeActivate(node);
+                      handleNodeActivate(node, linkedClaimId);
                     }
                   }}
                 >
@@ -669,125 +637,120 @@ export const EvidenceMap = memo(function EvidenceMap({
                     width={width}
                     height={height}
                     rx={10}
-                    fill={
-                      isSelectedClaim || isSelectedPassage
-                        ? 'var(--accent-primary-soft)'
-                        : 'var(--bg-elevated)'
-                    }
-                    stroke={strokeColor}
+                    fill={fill}
+                    stroke={stroke}
                     strokeWidth={isSelectedClaim || isSelectedPassage ? 2.4 : 1.3}
                   />
 
-                  {accentColor ? (
-                    <rect
-                      x={x + 1}
-                      y={y + 8}
-                      width={4}
-                      height={height - 16}
-                      rx={2}
-                      fill={accentColor}
-                    />
+                  {accent && card.verdict !== 'unverified' ? (
+                    <rect x={x + 1} y={y + 8} width={4} height={height - 16} rx={2} fill={accent} />
                   ) : null}
 
                   <text
                     x={x + 13}
-                    y={y + 20}
+                    y={y + 19}
                     fill={
-                      accentColor && linkedEdge?.label !== 'neutral'
-                        ? accentColor
-                        : 'var(--text-muted)'
+                      node.type === 'claim' && card.verdict && card.verdict !== 'unverified'
+                        ? verdictColor(card.verdict)
+                        : node.type === 'passage' &&
+                            card.linkedEdge &&
+                            card.linkedEdge.label !== 'neutral'
+                          ? labelColor(card.linkedEdge.label)
+                          : 'var(--text-muted)'
                     }
-                    fontSize="10"
-                    fontWeight="700"
+                    fontSize="9.8"
+                    fontWeight="800"
                   >
-                    {node.type === 'passage' && linkedEdge?.label
-                      ? `${shortLabel(linkedEdge.label).toUpperCase()}${
-                          typeof linkedEdge.score === 'number'
-                            ? ` · ${Math.round(linkedEdge.score * 100)}%`
-                            : ''
-                        }${isCrossDoc ? ' · ДРУГОЙ ФАЙЛ' : ''}`
-                      : `${node.type.toUpperCase()}${
-                          node.type === 'claim' && typeof node.confidence === 'number'
+                    {node.type === 'claim' && card.verdict
+                      ? `${verdictText(card.verdict)}${
+                          typeof node.confidence === 'number'
                             ? ` · ${Math.round(node.confidence * 100)}%`
                             : ''
-                        }${node.type === 'claim' && node.has_evidence === false ? ' · NO EVIDENCE' : ''}`}
+                        }`
+                      : node.type === 'passage' && card.linkedEdge?.label
+                        ? `${shortVerdictEdgeLabel(card.linkedEdge.label).toUpperCase()}${
+                            typeof card.linkedEdge.score === 'number'
+                              ? ` · ${Math.round(card.linkedEdge.score * 100)}%`
+                              : ''
+                          }${card.isCrossDoc ? ' · ДРУГОЙ ФАЙЛ' : ''}`
+                        : 'ИСТОЧНИК'}
                   </text>
 
                   <text
                     x={x + 13}
-                    y={y + 38}
+                    y={y + 36}
                     fill="var(--text-primary)"
-                    fontSize="11.5"
+                    fontSize="11.2"
                     fontWeight="500"
                   >
                     {bodyLines.map((line, idx) => (
-                      <tspan key={idx} x={x + 13} dy={idx === 0 ? 0 : 15}>
+                      <tspan key={idx} x={x + 13} dy={idx === 0 ? 0 : 14.5}>
                         {line}
                       </tspan>
                     ))}
                   </text>
 
-                  {focusSelected && node.type === 'passage' && passageSourceName ? (
+                  {!card.compact && card.sourceName ? (
                     <text
                       x={x + 13}
-                      y={y + height - 10}
+                      y={y + height - 9}
                       fill="var(--text-muted)"
-                      fontSize="9.5"
+                      fontSize="9.3"
                       fontWeight="500"
                     >
-                      {shortFilename(passageSourceName, 32)}
-                      {node.page_no ? ` · p.${node.page_no}` : ''}
-                    </text>
-                  ) : null}
-
-                  {focusSelected && node.type === 'claim' && node.document_id ? (
-                    <text
-                      x={x + 13}
-                      y={y + height - 10}
-                      fill="var(--text-muted)"
-                      fontSize="9.5"
-                      fontWeight="500"
-                    >
-                      {shortFilename(docNameById.get(node.document_id) ?? '', 28)}
-                      {node.page_no ? ` · p.${node.page_no}` : ''}
+                      {shortFilename(card.sourceName, Math.max(18, charsPerLine - 2))}
+                      {node.page_no ? ` · стр. ${node.page_no}` : ''}
                     </text>
                   ) : null}
                 </g>
               );
             })}
 
-            {/* Layer 3: Edge verdict pills rendered cleanly on top in the gutter */}
-            {renderedEdges
-              .filter((item) => item.showLabel)
-              .map(({ edge, color, pillX, pillY }) => {
-                const pillText = `${shortLabel(edge.label)}${
-                  typeof edge.score === 'number' ? ` ${Math.round(edge.score * 100)}%` : ''
-                }`;
-                return (
-                  <g key={`pill:${edge.id}`} pointerEvents="none">
-                    <rect
-                      x={pillX - 50}
-                      y={pillY - 10}
-                      width={100}
-                      height={20}
-                      rx={10}
-                      fill="var(--bg-surface)"
-                      stroke={color}
-                      strokeWidth={1.2}
-                    />
-                    <text
-                      x={pillX}
-                      y={pillY + 3.5}
-                      textAnchor="middle"
-                      fontSize="10"
-                      fontWeight="700"
-                      fill={color}
-                    >
-                      {pillText}
-                    </text>
-                  </g>
-                );
-              })}
+            {/* Layer 4: Highlighted edge verdict pills — brightly illuminated on selection/hover */}
+            {brightPills.map((item) => {
+              const pillText = `${shortVerdictEdgeLabel(item.edge.label)}${
+                typeof item.edge.score === 'number' ? ` ${Math.round(item.edge.score * 100)}%` : ''
+              }`;
+              const isHovered = hoveredEdgeKey === item.key;
+              const pillW = Math.max(108, pillText.length * 6.8 + 20);
+              const isNeutral = item.edge.label === 'neutral';
+
+              return (
+                <g
+                  key={`bright-pill:${item.key}`}
+                  className="graph-edge-hit graph-edge-pill-active"
+                  onMouseEnter={() => setHoveredEdgeKey(item.key)}
+                  onMouseLeave={() => setHoveredEdgeKey(null)}
+                  onClick={() => {
+                    if (item.claimNodeId) onSelectClaim(item.claimNodeId.replace(/^claim:/, ''));
+                    if (item.passageNodeId) {
+                      onSelectPassage?.(item.passageNodeId.replace(/^passage:/, ''));
+                    }
+                  }}
+                >
+                  <rect
+                    x={item.pillX - pillW / 2}
+                    y={item.pillY - 11.5}
+                    width={pillW}
+                    height={23}
+                    rx={11.5}
+                    fill={isNeutral ? 'var(--bg-surface)' : item.color}
+                    stroke={isHovered ? 'var(--text-primary)' : item.color}
+                    strokeWidth={isHovered ? 2 : 1.5}
+                  />
+                  <text
+                    x={item.pillX}
+                    y={item.pillY + 4}
+                    textAnchor="middle"
+                    fontSize="10.2"
+                    fontWeight="800"
+                    fill={isNeutral ? 'var(--text-primary)' : 'var(--text-inverse)'}
+                  >
+                    {pillText}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         </svg>
       </div>
@@ -795,19 +758,19 @@ export const EvidenceMap = memo(function EvidenceMap({
       <div className="graph-legend">
         <span className="legend-item">
           <span className="legend-swatch entailment" aria-hidden="true" />
-          Entailment (supports)
+          Доказано / Подтверждает
         </span>
         <span className="legend-item">
           <span className="legend-swatch contradiction" aria-hidden="true" />
-          Contradiction (refutes)
+          Опровергнуто / Противоречит
         </span>
         <span className="legend-item">
           <span className="legend-swatch neutral" aria-hidden="true" />
-          Neutral
+          Нейтрально
         </span>
         <span className="text-muted">
-          Click a passage to jump to it · Hover any card for full text · Use &lt;/&gt; to step
-          claims
+          Наведите на ребро или карточку для подсветки · Переключайте виды: Острова / Весы /
+          Созвездие
         </span>
       </div>
     </section>
