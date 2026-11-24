@@ -1,7 +1,8 @@
-import { BookMarked, ChevronDown, ChevronUp, Info, ShieldAlert } from 'lucide-react';
+import { BookMarked, ChevronDown, ChevronUp, Info, ShieldAlert, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '../../components/common/Badge';
+import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Select } from '../../components/common/Select';
 import type { ClaimItem, EvidenceItem, NliLabel } from '../../models/api';
@@ -12,6 +13,7 @@ export interface ClaimDetailDrawerProps {
   focusedPassageId?: string | null;
   overridingEvidenceId: string | null;
   onOverrideLabel: (evidenceId: string, userLabel: NliLabel | null) => void;
+  onClose?: () => void;
 }
 
 const OVERRIDE_OPTIONS = [
@@ -177,6 +179,7 @@ export function ClaimDetailDrawer({
   focusedPassageId = null,
   overridingEvidenceId,
   onOverrideLabel,
+  onClose,
 }: ClaimDetailDrawerProps) {
   const sortedEvidence = useMemo(() => {
     if (!claim) return [];
@@ -208,11 +211,28 @@ export function ClaimDetailDrawer({
   }
 
   return (
-    <aside className="surface-card stack-md" aria-label="Claim detail inspector">
+    <aside
+      className="surface-card stack-md inspector-drawer-card"
+      aria-label="Claim detail inspector"
+    >
       <div className="stack-sm">
-        <div className="cluster">
-          <h2>Claim Inspector</h2>
-          <Badge variant="info">Claim score: {Math.round(claim.confidence * 100)}%</Badge>
+        <div className="inspector-drawer-header">
+          <div className="cluster">
+            <h2>Claim Inspector</h2>
+            <Badge variant="info">Claim score: {Math.round(claim.confidence * 100)}%</Badge>
+          </div>
+          {onClose ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              onClick={onClose}
+              aria-label="Close Claim Inspector"
+              id="close-inspector-btn"
+            >
+              <X size={16} aria-hidden="true" />
+            </Button>
+          ) : null}
         </div>
         <blockquote className="claim-quote">{claim.text}</blockquote>
         <div className="cluster text-muted">

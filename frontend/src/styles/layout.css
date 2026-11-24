@@ -2,6 +2,11 @@
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   min-height: 100dvh;
+  transition: grid-template-columns var(--duration-base) var(--ease-standard);
+}
+
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 
 .app-sidebar {
@@ -14,6 +19,18 @@
   padding: var(--space-5) var(--space-4);
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    padding var(--duration-base) var(--ease-standard);
+}
+
+.app-shell.sidebar-collapsed .app-sidebar {
+  padding: 0;
+  border-right: none;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 .brand-mark {
@@ -228,11 +245,14 @@
 
 /* Tablet */
 @media (max-width: 1023px) {
-  .app-shell {
+  .app-shell,
+  .app-shell.sidebar-collapsed {
     grid-template-columns: 1fr;
   }
 
-  .app-sidebar {
+  .app-sidebar,
+  .sidebar-toggle-desktop,
+  .topbar-brand-collapsed {
     display: none;
   }
 

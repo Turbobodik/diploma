@@ -141,4 +141,20 @@ describe('ClaimDetailDrawer', () => {
     await user.click(screen.getByRole('button', { name: /Свернуть/i }));
     expect(articles[0]).not.toHaveTextContent(/Введение к исследованию/i);
   });
+
+  it('invokes onClose when used as an overlay drawer', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ClaimDetailDrawer
+        claim={SAMPLE_CLAIM}
+        overridingEvidenceId={null}
+        onOverrideLabel={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Close Claim Inspector' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

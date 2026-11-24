@@ -1,4 +1,12 @@
-import { AlertCircle, ArrowLeft, Download, FileText, Play, RefreshCw } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Download,
+  FileText,
+  PanelRightOpen,
+  Play,
+  RefreshCw,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -76,11 +84,22 @@ export default function WorkspacePage() {
     device.breakpoint === 'mobile' ? 'table' : 'map',
   );
   const [selectedPassageId, setSelectedPassageId] = useState<string | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState<boolean>(true);
   const [exportingFormat, setExportingFormat] = useState<ExportFormat | null>(null);
   const debouncedSearch = useDebounce(filters.search, 250);
   const isWorkspaceLoading = loading || loadedProjectId !== projectId;
 
   useDocumentTitle(project ? project.name : 'Workspace');
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setInspectorOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     if (!projectId) return;
@@ -388,8 +407,8 @@ export default function WorkspacePage() {
             </div>
           </section>
 
-          <div className="workspace-split">
-            <div className="stack-md">
+          <div className="workspace-stage">
+            <div className="workspace-stage-main stack-md">
               {viewMode === 'map' ? (
                 <EvidenceMap
                   graph={graph}
@@ -397,9 +416,13 @@ export default function WorkspacePage() {
                   selectedPassageId={selectedPassageId}
                   onSelectClaim={(claimId) => {
                     setSelectedPassageId(null);
+                    setInspectorOpen(true);
                     dispatch(selectClaim(claimId));
                   }}
-                  onSelectPassage={(passageId) => setSelectedPassageId(passageId)}
+                  onSelectPassage={(passageId) => {
+                    setSelectedPassageId(passageId);
+                    setInspectorOpen(true);
+                  }}
                 />
               ) : (
                 <ClaimsTable
@@ -409,6 +432,7 @@ export default function WorkspacePage() {
                   sortDirection={filters.sortDirection}
                   onSelectClaim={(claimId) => {
                     setSelectedPassageId(null);
+                    setInspectorOpen(true);
                     dispatch(selectClaim(claimId));
                   }}
                   onSort={(field) => dispatch(setClaimSort({ field }))}
@@ -416,14 +440,32 @@ export default function WorkspacePage() {
               )}
             </div>
 
-            <ClaimDetailDrawer
-              claim={selectedClaim}
-              focusedPassageId={selectedPassageId}
-              overridingEvidenceId={overridingEvidenceId}
-              onOverrideLabel={(evidenceId, userLabel) =>
-                void dispatch(overrideEvidenceThunk({ evidenceId, userLabel }))
-              }
-            />
+            {selectedClaim && !inspectorOpen ? (
+              <Button
+                variant="primary"
+                size="sm"
+                className="inspector-reopen-btn"
+                onClick={() => setInspectorOpen(true)}
+                id="open-inspector-btn"
+              >
+                <PanelRightOpen size={15} aria-hidden="true" />
+                Claim Inspector
+              </Button>
+            ) : null}
+
+            {selectedClaim && inspectorOpen ? (
+              <div className="inspector-overlay" role="region" aria-label="Claim Inspector overlay">
+                <ClaimDetailDrawer
+                  claim={selectedClaim}
+                  focusedPassageId={selectedPassageId}
+                  overridingEvidenceId={overridingEvidenceId}
+                  onOverrideLabel={(evidenceId, userLabel) =>
+                    void dispatch(overrideEvidenceThunk({ evidenceId, userLabel }))
+                  }
+                  onClose={() => setInspectorOpen(false)}
+                />
+              </div>
+            ) : null}
           </div>
         </>
       )}

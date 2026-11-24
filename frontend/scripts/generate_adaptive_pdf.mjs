@@ -331,21 +331,21 @@ async function main() {
         route: '/projects/p-scifact',
         width: 1440,
         height: 900,
-        scrollSelector: '.workspace-split',
+        scrollSelector: '.workspace-stage',
       }),
       workspaceTablet: await capture({
         name: 'workspace-tablet',
         route: '/projects/p-scifact',
         width: 768,
         height: 1024,
-        scrollSelector: '.workspace-split',
+        scrollSelector: '.workspace-stage',
       }),
       workspaceMobile: await capture({
         name: 'workspace-mobile',
         route: '/projects/p-scifact',
         width: 375,
         height: 812,
-        scrollSelector: '.workspace-split',
+        scrollSelector: '.workspace-stage',
       }),
       workspaceDark: await capture({
         name: 'workspace-desktop-dark',
@@ -353,7 +353,7 @@ async function main() {
         width: 1440,
         height: 900,
         theme: 'dark',
-        scrollSelector: '.workspace-split',
+        scrollSelector: '.workspace-stage',
       }),
 
       designDesktop: await capture({ name: 'design-system-desktop', route: '/design-system', width: 1440, height: 980 }),

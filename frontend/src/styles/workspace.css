@@ -67,12 +67,52 @@
   display: none;
 }
 
-/* Workspace Layout */
-.workspace-split {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 1fr);
-  gap: var(--space-5);
-  align-items: start;
+/* Workspace Layout — full-width Evidence Map with Claim Inspector overlay */
+.workspace-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.workspace-stage-main {
+  width: 100%;
+  min-width: 0;
+}
+
+.inspector-overlay {
+  position: absolute;
+  top: 4rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  width: min(26rem, calc(100% - 1.5rem));
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+.inspector-overlay .inspector-drawer-card {
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-surface);
+}
+
+.inspector-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.inspector-reopen-btn {
+  position: absolute;
+  top: 4.1rem;
+  right: 0.9rem;
+  z-index: 24;
+  box-shadow: var(--shadow-sm);
 }
 
 /* Document Dropzone */
@@ -395,8 +435,17 @@
     padding: var(--space-6) var(--space-4);
   }
 
-  .workspace-split {
-    grid-template-columns: 1fr;
+  .inspector-overlay {
+    top: 4.5rem;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+    width: auto;
+  }
+
+  .inspector-reopen-btn {
+    top: 4.6rem;
+    right: 0.6rem;
   }
 }
 
