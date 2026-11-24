@@ -131,10 +131,14 @@ def _update_job(
             job.progress_pct = max(0, min(100, int(progress_pct)))
         if error_message is not None:
             job.error_message = error_message[:1000]
+        created = job.created_at.replace(tzinfo=UTC) if job.created_at and job.created_at.tzinfo is None else job.created_at
         if mark_started and job.started_at is None:
-            job.started_at = now
+            job.started_at = max(now, created) if created else now
         if mark_finished:
-            job.finished_at = now
+            if job.started_at is None:
+                job.started_at = max(now, created) if created else now
+            started = job.started_at.replace(tzinfo=UTC) if job.started_at.tzinfo is None else job.started_at
+            job.finished_at = max(now, started)
         db.commit()
 
 

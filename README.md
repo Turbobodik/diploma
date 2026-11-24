@@ -5,6 +5,13 @@
 - **Student:** Bahdan Kanoplich (EHU, Computer Science, 4th year)
 - **Supervisor:** Maksym Lipchanskyi (NTU "KhPI")
 
+### Live Production Deployment (Render)
+- **Web Application (SPA):** https://factmap-scholar-web.onrender.com
+- **Backend REST API:** https://factmap-scholar-api.onrender.com
+- **Interactive Swagger UI:** https://factmap-scholar-api.onrender.com/docs
+- **Interactive ReDoc:** https://factmap-scholar-api.onrender.com/redoc
+- **Health Check:** https://factmap-scholar-api.onrender.com/health
+
 FactMap Scholar lets researchers upload scientific publications (PDF/TXT) into isolated project workspaces, extract verbatim factual claims with exact character spans, retrieve candidate passages across documents using dense embeddings, classify claim–passage pairs with 3-way NLI (`entailment`, `contradiction`, `neutral`), and explore or audit the resulting interactive **Evidence Map**.
 
 ---

@@ -76,6 +76,7 @@ class DocumentService:
             kind=JobKind.EXTRACT_TEXT.value,
             status=JobStatus.RUNNING.value,
             progress_pct=10,
+            created_at=now,
             started_at=now,
         )
         self._db.add(job)
