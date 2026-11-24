@@ -201,10 +201,9 @@ diploma/
 ├── backend/                   # FastAPI layered backend + local ML/NLI pipeline
 ├── docs/
 │   ├── frontend/              # Front-End architecture, user flows, stack justification
-│   ├── adaptive-ui/           # Labeled Adaptive UI PDF spec, 3-device screenshots & guide
+│   ├── adaptive-ui/           # Labeled Adaptive UI PDF specification & guide
 │   ├── api/                   # Validated OpenAPI 3.1 spec, ReDoc HTML, guides, Postman, cURL
-│   ├── ml/                    # SciFact retrieval/NLI & claim-span benchmarks
-│   └── criteria/              # Stage 3 diploma review rubrics & checklists
+│   └── ml/                    # SciFact retrieval/NLI & claim-span benchmarks
 ├── expertise-database/        # Frozen Stage 2 Database criterion review package
 └── BA_Kanoplich_Bahdan.md     # Business Analysis document
 ```

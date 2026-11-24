@@ -1,7 +1,6 @@
 # FactMap Scholar — Adaptive UI (Web/Mobile) Specification
 
 > **Deliverable PDF (Labeled Mockups + Component Library):** [`Adaptive_UI_Specification_Kanoplich_Bahdan.pdf`](Adaptive_UI_Specification_Kanoplich_Bahdan.pdf)  
-> **Interactive HTML Mirror:** [`specification.html`](specification.html)  
 > **Live Component Showcase Route:** `/design-system` ([`frontend/src/pages/DesignSystemPage.tsx`](../../frontend/src/pages/DesignSystemPage.tsx))
 
 ---

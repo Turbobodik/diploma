@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FRONTEND_DIR = path.resolve(__dirname, '..');
 const REPO_ROOT = path.resolve(FRONTEND_DIR, '..');
 const OUT_DIR = path.join(REPO_ROOT, 'docs', 'adaptive-ui');
-const SHOTS_DIR = path.join(OUT_DIR, 'screenshots');
+const SHOTS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'factmap-adaptive-'));
 const PDF_PATH = path.join(OUT_DIR, 'Adaptive_UI_Specification_Kanoplich_Bahdan.pdf');
 
 const PORT = 4179;
@@ -761,8 +762,7 @@ async function main() {
 </body>
 </html>`;
 
-    const htmlPath = path.join(OUT_DIR, 'specification.html');
-    fs.writeFileSync(htmlPath, html, 'utf8');
+    fs.mkdirSync(OUT_DIR, { recursive: true });
 
     const pdfPage = await browser.newPage();
     await pdfPage.setContent(html, { waitUntil: 'load' });
