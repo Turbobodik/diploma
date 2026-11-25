@@ -12,10 +12,28 @@ class ProjectRepository:
         stmt = select(Project).where(Project.id == project_id, Project.owner_id == owner_id)
         return self._db.scalar(stmt)
 
-    def exists_name_for_owner(self, owner_id: str, name: str) -> bool:
+    def get_owned_with_counts(self, project_id: str, owner_id: str) -> tuple[Project, int, int] | None:
+        project = self.get_owned(project_id, owner_id)
+        if project is None:
+            return None
+        doc_cnt = int(
+            self._db.scalar(select(func.count()).select_from(Document).where(Document.project_id == project.id)) or 0
+        )
+        claim_cnt = int(
+            self._db.scalar(select(func.count()).select_from(Claim).where(Claim.project_id == project.id)) or 0
+        )
+        return project, doc_cnt, claim_cnt
+
+    def exists_name_for_owner(
+        self, owner_id: str, name: str, *, exclude_project_id: str | None = None
+    ) -> bool:
         target = name.casefold()
-        existing_names = self._db.scalars(select(Project.name).where(Project.owner_id == owner_id)).all()
-        return any(existing.casefold() == target for existing in existing_names)
+        stmt = select(Project.id, Project.name).where(Project.owner_id == owner_id)
+        rows = self._db.execute(stmt).all()
+        return any(
+            str(pid) != exclude_project_id and str(existing).casefold() == target
+            for pid, existing in rows
+        )
 
     def list_by_owner(self, owner_id: str, *, limit: int, offset: int) -> tuple[list[tuple[Project, int, int]], int]:
         total = int(
@@ -50,6 +68,12 @@ class ProjectRepository:
     def create(self, *, owner_id: str, name: str) -> Project:
         project = Project(owner_id=owner_id, name=name)
         self._db.add(project)
+        self._db.commit()
+        self._db.refresh(project)
+        return project
+
+    def rename(self, project: Project, new_name: str) -> Project:
+        project.name = new_name
         self._db.commit()
         self._db.refresh(project)
         return project

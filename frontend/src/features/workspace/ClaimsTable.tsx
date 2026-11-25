@@ -1,16 +1,21 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, FileSearch } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, FileSearch, RotateCcw } from 'lucide-react';
 
 import { Badge } from '../../components/common/Badge';
+import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import type { ClaimItem } from '../../models/api';
 import type { ClaimSortField, SortDirection } from '../../models/ui';
+import type { DocumentContextTarget } from './DocumentContextModal';
 
 export interface ClaimsTableProps {
   claims: ClaimItem[];
   selectedClaimId: string | null;
   sortField: ClaimSortField;
   sortDirection: SortDirection;
+  hasActiveFilters?: boolean;
   onSelectClaim: (claimId: string) => void;
+  onOpenContext?: (target: DocumentContextTarget) => void;
+  onResetFilters?: () => void;
   onSort: (field: ClaimSortField) => void;
 }
 
@@ -40,7 +45,10 @@ export function ClaimsTable({
   selectedClaimId,
   sortField,
   sortDirection,
+  hasActiveFilters = false,
   onSelectClaim,
+  onOpenContext,
+  onResetFilters,
   onSort,
 }: ClaimsTableProps) {
   if (claims.length === 0) {
@@ -48,7 +56,19 @@ export function ClaimsTable({
       <EmptyState
         icon={<FileSearch size={22} />}
         title="No matching claims"
-        description="Run the analysis pipeline or adjust your search query and NLI label filters."
+        description={
+          hasActiveFilters
+            ? 'No claims match your current search, document, or verdict filters.'
+            : 'Run the analysis pipeline to extract claims and verify them across your papers.'
+        }
+        action={
+          hasActiveFilters && onResetFilters ? (
+            <Button variant="secondary" size="sm" onClick={onResetFilters}>
+              <RotateCcw size={14} aria-hidden="true" />
+              Reset filters
+            </Button>
+          ) : undefined
+        }
       />
     );
   }
@@ -78,10 +98,11 @@ export function ClaimsTable({
                   className="sort-button"
                   onClick={() => onSort('evidence_count')}
                 >
-                  NLI Evidence
+                  Verdict
                   <SortIcon active={sortField === 'evidence_count'} direction={sortDirection} />
                 </button>
               </th>
+              {onOpenContext ? <th>Context</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -98,7 +119,10 @@ export function ClaimsTable({
                     <button
                       type="button"
                       className="sort-button"
-                      onClick={() => onSelectClaim(claim.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onSelectClaim(claim.id);
+                      }}
                       aria-pressed={isSelected}
                     >
                       <span>{claim.text}</span>
@@ -112,7 +136,7 @@ export function ClaimsTable({
                   <td>
                     <div className="cluster">
                       {!claim.has_evidence ? (
-                        <Badge variant="warning">No evidence</Badge>
+                        <Badge variant="warning">No verdict</Badge>
                       ) : (
                         <>
                           {counts.entailment > 0 ? (
@@ -124,10 +148,32 @@ export function ClaimsTable({
                         </>
                       )}
                       {counts.neutral > 0 ? (
-                        <Badge variant="neutral">{counts.neutral} neutral</Badge>
+                        <Badge variant="neutral">{counts.neutral} context</Badge>
                       ) : null}
                     </div>
                   </td>
+                  {onOpenContext ? (
+                    <td>
+                      <button
+                        type="button"
+                        className="evidence-toggle-btn"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenContext({
+                            documentId: claim.source_document_id,
+                            documentName: claim.source_name,
+                            charStart: claim.char_start,
+                            charEnd: claim.char_end,
+                            pageNo: claim.page_no,
+                            heading: 'Claim Source Context',
+                          });
+                        }}
+                      >
+                        <BookOpen size={13} aria-hidden="true" />
+                        Read
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
@@ -156,23 +202,43 @@ export function ClaimsTable({
               </button>
               <div className="cluster text-muted">
                 <span>{claim.source_name}</span>
+                {claim.page_no ? <span>· p.{claim.page_no}</span> : null}
                 <span className="mono">· {Math.round(claim.confidence * 100)}%</span>
               </div>
               <div className="cluster">
                 {!claim.has_evidence ? (
-                  <Badge variant="warning">No evidence found</Badge>
+                  <Badge variant="warning">No verdict</Badge>
                 ) : (
                   <>
                     {counts.entailment > 0 ? (
-                      <Badge variant="entailment">{counts.entailment} entailment</Badge>
+                      <Badge variant="entailment">{counts.entailment} support</Badge>
                     ) : null}
                     {counts.contradiction > 0 ? (
-                      <Badge variant="contradiction">{counts.contradiction} contradiction</Badge>
+                      <Badge variant="contradiction">{counts.contradiction} refute</Badge>
                     ) : null}
                   </>
                 )}
                 {counts.neutral > 0 ? (
-                  <Badge variant="neutral">{counts.neutral} neutral</Badge>
+                  <Badge variant="neutral">{counts.neutral} context</Badge>
+                ) : null}
+                {onOpenContext ? (
+                  <button
+                    type="button"
+                    className="evidence-toggle-btn"
+                    onClick={() =>
+                      onOpenContext({
+                        documentId: claim.source_document_id,
+                        documentName: claim.source_name,
+                        charStart: claim.char_start,
+                        charEnd: claim.char_end,
+                        pageNo: claim.page_no,
+                        heading: 'Claim Source Context',
+                      })
+                    }
+                  >
+                    <BookOpen size={13} aria-hidden="true" />
+                    Read in document
+                  </button>
                 ) : null}
               </div>
             </article>

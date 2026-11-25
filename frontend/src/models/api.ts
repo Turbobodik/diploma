@@ -57,6 +57,10 @@ export interface AuthResponse {
   user: UserProfile;
 }
 
+export interface GuestDemoResponse extends AuthResponse {
+  demo_project_id: string;
+}
+
 export interface CreateProjectRequest {
   name: string;
 }
@@ -191,4 +195,48 @@ export interface OverrideRequest {
 export interface OverrideResponse {
   id: string;
   user_label: NliLabel | null;
+}
+
+export interface DocumentContextResponse {
+  document_id: string;
+  document_name: string;
+  page_no: number | null;
+  total_chars: number;
+  window_start: number;
+  window_end: number;
+  highlight_start: number;
+  highlight_end: number;
+  excerpt: string;
+  has_before: boolean;
+  has_after: boolean;
+}
+
+export interface VerifyClaimRequest {
+  claim_text: string;
+  top_k?: number;
+  include_neutral?: boolean;
+}
+
+export interface VerifyEvidenceItem {
+  passage_id: string | null;
+  document_id: string;
+  document_name: string;
+  page_no: number | null;
+  char_start: number;
+  char_end: number;
+  passage_text: string;
+  retrieval_score: number;
+  model_name: string;
+  model_label: NliLabel;
+  model_score: number;
+}
+
+export type AggregateVerdict = 'supported' | 'refuted' | 'conflicting' | 'no_evidence';
+
+export interface VerifyClaimResponse {
+  claim_text: string;
+  verdict: AggregateVerdict;
+  ml_backend: string;
+  checked_passages: number;
+  evidence: VerifyEvidenceItem[];
 }

@@ -68,10 +68,10 @@
           "200": {
             "description": "Prometheus text exposition format metrics",
             "content": {
+              "application/json": {
+                "schema": {}
+              },
               "text/plain": {
-                "schema": {
-                  "type": "string"
-                },
                 "example": "# HELP factmap_http_requests_total Total HTTP requests\n"
               }
             }
@@ -186,6 +186,28 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/guest": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create an isolated guest session with a preloaded demo workspace for instant evaluation",
+        "operationId": "guest_demo_api_v1_auth_guest_post",
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestDemoOut"
                 }
               }
             }
@@ -365,7 +387,247 @@
         }
       }
     },
+    "/api/v1/projects/demo": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a preloaded demo project with two controversial Russian CyberLeninka articles and run analysis",
+        "operationId": "create_demo_project_api_v1_projects_demo_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Bundled demo corpus identifier.",
+              "default": "cyberleninka-remote-work-ru",
+              "title": "Preset"
+            },
+            "description": "Bundled demo corpus identifier."
+          },
+          {
+            "name": "sync",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Run pipeline synchronously (defaults to true in stub mode and false in transformers mode).",
+              "title": "Sync"
+            },
+            "description": "Run pipeline synchronously (defaults to true in stub mode and false in transformers mode)."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown demo preset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Retrieve metadata and counters for a single owned project",
+        "operationId": "get_project_api_v1_projects__project_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found or owned by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Rename an existing project workspace",
+        "operationId": "rename_project_api_v1_projects__project_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found or owned by another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate project name for this owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Empty or invalid project name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "projects"
@@ -640,6 +902,202 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/documents/{document_id}/context": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Read surrounding document context around a highlighted character span",
+        "operationId": "get_document_context_api_v1_projects__project_id__documents__document_id__context_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          },
+          {
+            "name": "char_start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Start character offset to highlight",
+              "default": 0,
+              "title": "Char Start"
+            },
+            "description": "Start character offset to highlight"
+          },
+          {
+            "name": "char_end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Exclusive end character offset to highlight",
+              "default": 0,
+              "title": "Char End"
+            },
+            "description": "Exclusive end character offset to highlight"
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 100,
+              "description": "Characters of surrounding context on each side",
+              "default": 900,
+              "title": "Window"
+            },
+            "description": "Characters of surrounding context on each side"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentContextOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or document not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/documents/{document_id}": {
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Delete a single document from a project along with its passages, claims, and stored file",
+        "operationId": "delete_document_api_v1_projects__project_id__documents__document_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project or document not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}/analyze": {
       "post": {
         "tags": [
@@ -717,22 +1175,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "429": {
             "description": "Rate limit exceeded (60 req/min)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -892,6 +1350,18 @@
             "description": "Case-insensitive substring search across claim text and document title"
           },
           {
+            "name": "cross_document_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only include evidence passages from a different document than the claim source",
+              "default": false,
+              "title": "Cross Document Only"
+            },
+            "description": "Only include evidence passages from a different document than the claim source"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1031,6 +1501,18 @@
               "title": "Include Neutral"
             },
             "description": "Include neutral NLI edges in the graph"
+          },
+          {
+            "name": "cross_document_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Only include evidence edges linking passages from a different document than the claim source",
+              "default": false,
+              "title": "Cross Document Only"
+            },
+            "description": "Only include evidence edges linking passages from a different document than the claim source"
           }
         ],
         "responses": {
@@ -1150,6 +1632,16 @@
               ],
               "title": "Document Id"
             }
+          },
+          {
+            "name": "cross_document_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Cross Document Only"
+            }
           }
         ],
         "responses": {
@@ -1187,6 +1679,104 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/verify": {
+      "post": {
+        "tags": [
+          "claims & graph"
+        ],
+        "summary": "Verify a custom user-supplied claim or hypothesis against uploaded project papers",
+        "operationId": "verify_custom_claim_api_v1_projects__project_id__verify_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyClaimIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyClaimOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Project not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Project has no ready documents to verify against",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid claim text",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (60 req/min)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -1528,6 +2118,86 @@
           "deleted"
         ],
         "title": "DeleteOut"
+      },
+      "DocumentContextOut": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Document UUID"
+          },
+          "document_name": {
+            "type": "string",
+            "title": "Document Name",
+            "description": "Original filename"
+          },
+          "page_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page No",
+            "description": "1-based page number at char_start for PDFs"
+          },
+          "total_chars": {
+            "type": "integer",
+            "title": "Total Chars",
+            "description": "Total length of extracted document text"
+          },
+          "window_start": {
+            "type": "integer",
+            "title": "Window Start",
+            "description": "Start offset of returned context window in document"
+          },
+          "window_end": {
+            "type": "integer",
+            "title": "Window End",
+            "description": "Exclusive end offset of returned context window in document"
+          },
+          "highlight_start": {
+            "type": "integer",
+            "title": "Highlight Start",
+            "description": "Relative start offset of target span inside excerpt"
+          },
+          "highlight_end": {
+            "type": "integer",
+            "title": "Highlight End",
+            "description": "Relative exclusive end offset of target span inside excerpt"
+          },
+          "excerpt": {
+            "type": "string",
+            "title": "Excerpt",
+            "description": "Surrounding document text containing the highlighted span"
+          },
+          "has_before": {
+            "type": "boolean",
+            "title": "Has Before",
+            "description": "Whether earlier text exists before window_start"
+          },
+          "has_after": {
+            "type": "boolean",
+            "title": "Has After",
+            "description": "Whether additional text exists after window_end"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_name",
+          "total_chars",
+          "window_start",
+          "window_end",
+          "highlight_start",
+          "highlight_end",
+          "excerpt",
+          "has_before",
+          "has_after"
+        ],
+        "title": "DocumentContextOut"
       },
       "DocumentListOut": {
         "properties": {
@@ -2039,6 +2709,51 @@
         ],
         "title": "GraphOut"
       },
+      "GuestDemoOut": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "RFC 7519 Bearer JWT access token",
+            "examples": [
+              "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            ]
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "description": "Token scheme",
+            "default": "bearer",
+            "examples": [
+              "bearer"
+            ]
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In",
+            "description": "Token lifetime in seconds",
+            "examples": [
+              86400
+            ]
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "demo_project_id": {
+            "type": "string",
+            "title": "Demo Project Id",
+            "description": "UUID of the preloaded demo workspace created for this guest session"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "expires_in",
+          "user",
+          "demo_project_id"
+        ],
+        "title": "GuestDemoOut"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -2523,6 +3238,176 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerifyClaimIn": {
+        "properties": {
+          "claim_text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 5,
+            "title": "Claim Text",
+            "description": "Custom claim or hypothesis to verify against uploaded project documents",
+            "examples": [
+              "Hybrid work improves employee retention in IT companies."
+            ]
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "description": "Maximum candidate passages to inspect",
+            "default": 5
+          },
+          "include_neutral": {
+            "type": "boolean",
+            "title": "Include Neutral",
+            "description": "Whether to include neutral context passages in the response",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_text"
+        ],
+        "title": "VerifyClaimIn"
+      },
+      "VerifyClaimOut": {
+        "properties": {
+          "claim_text": {
+            "type": "string",
+            "title": "Claim Text",
+            "description": "Submitted custom claim text"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "supported",
+              "refuted",
+              "conflicting",
+              "no_evidence"
+            ],
+            "title": "Verdict",
+            "description": "Aggregate verdict across retrieved passages"
+          },
+          "ml_backend": {
+            "type": "string",
+            "title": "Ml Backend",
+            "description": "Active ML backend used for verification"
+          },
+          "checked_passages": {
+            "type": "integer",
+            "title": "Checked Passages",
+            "description": "Number of candidate passages evaluated by NLI"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/VerifyEvidenceOut"
+            },
+            "type": "array",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "claim_text",
+          "verdict",
+          "ml_backend",
+          "checked_passages",
+          "evidence"
+        ],
+        "title": "VerifyClaimOut"
+      },
+      "VerifyEvidenceOut": {
+        "properties": {
+          "passage_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passage Id",
+            "description": "Passage UUID if indexed in DB"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Document UUID containing the matched passage"
+          },
+          "document_name": {
+            "type": "string",
+            "title": "Document Name",
+            "description": "Filename of the source document"
+          },
+          "page_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page No",
+            "description": "1-based page number for PDFs"
+          },
+          "char_start": {
+            "type": "integer",
+            "title": "Char Start",
+            "description": "Start character offset in extracted_text"
+          },
+          "char_end": {
+            "type": "integer",
+            "title": "Char End",
+            "description": "Exclusive end character offset"
+          },
+          "passage_text": {
+            "type": "string",
+            "title": "Passage Text",
+            "description": "Verbatim excerpt from the source document"
+          },
+          "retrieval_score": {
+            "type": "number",
+            "title": "Retrieval Score",
+            "description": "Retrieval similarity score in [0, 1]"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name",
+            "description": "NLI model identifier"
+          },
+          "model_label": {
+            "type": "string",
+            "enum": [
+              "entailment",
+              "contradiction",
+              "neutral"
+            ],
+            "title": "Model Label",
+            "description": "NLI prediction"
+          },
+          "model_score": {
+            "type": "number",
+            "title": "Model Score",
+            "description": "NLI confidence score in [0, 1]"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "document_name",
+          "char_start",
+          "char_end",
+          "passage_text",
+          "retrieval_score",
+          "model_name",
+          "model_label",
+          "model_score"
+        ],
+        "title": "VerifyEvidenceOut"
       }
     },
     "securitySchemes": {

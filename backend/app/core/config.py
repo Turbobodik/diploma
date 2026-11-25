@@ -61,6 +61,7 @@ class Settings:
     max_claims_per_doc: int
     passage_target_chars: int
     top_k: int
+    min_retrieval_score: float
     ml_batch_size: int
     ml_device: str  # "cpu" | "cuda" | "auto"
     log_level: str
@@ -76,6 +77,9 @@ def load_settings() -> Settings:
         "sqlite:///" + str((ROOT / "factmap_dev.db").resolve()).replace("\\", "/"),
     )
     jwt_secret = os.environ.get("JWT_SECRET") or os.environ.get("TOKEN_SECRET") or _EPHEMERAL_FALLBACK_SECRET
+    ml_backend = os.environ.get("ML_BACKEND", "transformers").strip().lower()
+    default_min_ret = "0.20" if ml_backend == "stub" else "0.35"
+    min_retrieval_score = max(0.0, min(1.0, float(os.environ.get("MIN_RETRIEVAL_SCORE", default_min_ret))))
     return Settings(
         database_url=_normalize_database_url(raw_db),
         storage_dir=Path(os.environ.get("STORAGE_DIR", str(ROOT / "storage"))),
@@ -90,7 +94,7 @@ def load_settings() -> Settings:
         ),
         rate_limit_per_minute=max(1, int(os.environ.get("RATE_LIMIT_PER_MINUTE", "60"))),
         max_upload_bytes=MAX_UPLOAD_BYTES,
-        ml_backend=os.environ.get("ML_BACKEND", "transformers").strip().lower(),
+        ml_backend=ml_backend,
         embedding_model=os.environ.get("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"),
         nli_model=os.environ.get("NLI_MODEL", "cross-encoder/nli-deberta-v3-xsmall"),
         nli_class_weights=_parse_class_weights(os.environ.get("NLI_CLASS_WEIGHTS", "16.0,1.5,1.0")),
@@ -100,6 +104,7 @@ def load_settings() -> Settings:
         max_claims_per_doc=int(os.environ.get("MAX_CLAIMS_PER_DOC", "40")),
         passage_target_chars=int(os.environ.get("PASSAGE_TARGET_CHARS", "650")),
         top_k=max(1, min(20, int(os.environ.get("TOP_K", "5")))),
+        min_retrieval_score=min_retrieval_score,
         ml_batch_size=max(1, int(os.environ.get("ML_BATCH_SIZE", "16"))),
         ml_device=os.environ.get("ML_DEVICE", "cpu").strip().lower(),
         log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),

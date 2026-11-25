@@ -74,8 +74,9 @@ describe('ClaimDetailDrawer', () => {
     expect(onOverride).toHaveBeenCalledWith('ev-1', 'contradiction');
   });
 
-  it('highlights the key sentence, collapses long passages behind Show more, and prioritizes contradictions', async () => {
+  it('highlights Russian key sentence, collapses neutral context by default, and triggers Read in document', async () => {
     const user = userEvent.setup();
+    const onOpenContext = vi.fn();
     const multiClaim: ClaimItem = {
       ...SAMPLE_CLAIM,
       text: 'Удалённая работа повышает продуктивность разработчиков на 16%.',
@@ -119,27 +120,49 @@ describe('ClaimDetailDrawer', () => {
         claim={multiClaim}
         overridingEvidenceId={null}
         onOverrideLabel={vi.fn()}
+        onOpenContext={onOpenContext}
       />,
     );
 
-    // Contradiction is sorted first before neutral
-    const articles = screen.getAllByRole('article');
-    expect(articles[0]).toHaveTextContent('contradiction');
-    expect(articles[0]).toHaveTextContent('Другой источник');
+    // Only supporting/contradicting passage is visible by default; neutral is collapsed
+    const initialArticles = screen.getAllByRole('article');
+    expect(initialArticles).toHaveLength(1);
+    expect(initialArticles[0]).toHaveTextContent('Refutes');
+    expect(initialArticles[0]).toHaveTextContent('Other document');
 
-    // Collapsed by default: hides surrounding intro sentence, shows key sentence
-    expect(articles[0]).toHaveTextContent(/удалённая работа не повышает продуктивность/i);
-    expect(articles[0]).not.toHaveTextContent(/Введение к исследованию/i);
+    // Collapsed by default: hides surrounding intro sentence, shows Russian key sentence
+    expect(initialArticles[0]).toHaveTextContent(/удалённая работа не повышает продуктивность/i);
+    expect(initialArticles[0]).not.toHaveTextContent(/Введение к исследованию/i);
 
     // Expand full passage
-    const expandBtn = screen.getByRole('button', { name: /Показать полностью \(\+2 предл\.\)/i });
+    const expandBtn = screen.getByRole('button', { name: /Show full passage \(\+2 more\)/i });
     await user.click(expandBtn);
-    expect(articles[0]).toHaveTextContent(/Введение к исследованию/i);
-    expect(articles[0]).toHaveTextContent(/Дополнительные графики/i);
+    expect(initialArticles[0]).toHaveTextContent(/Введение к исследованию/i);
+    expect(initialArticles[0]).toHaveTextContent(/Дополнительные графики/i);
 
     // Collapse back
-    await user.click(screen.getByRole('button', { name: /Свернуть/i }));
-    expect(articles[0]).not.toHaveTextContent(/Введение к исследованию/i);
+    await user.click(screen.getByRole('button', { name: /Collapse/i }));
+    expect(initialArticles[0]).not.toHaveTextContent(/Введение к исследованию/i);
+
+    // Trigger Read in document context modal from evidence card
+    const contextBtns = screen.getAllByRole('button', { name: /Read in document/i });
+    await user.click(contextBtns[1]);
+    expect(onOpenContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: 'doc-2',
+        charStart: 200,
+        charEnd: 450,
+      }),
+    );
+
+    // Expand collapsed neutral context disclosure — verify neutral omits confusing 90%
+    await user.click(
+      screen.getByRole('button', { name: /Checked context without verdict \(1\)/i }),
+    );
+    const expandedArticles = screen.getAllByRole('article');
+    expect(expandedArticles).toHaveLength(2);
+    expect(expandedArticles[1]).toHaveTextContent('model: neutral (no verdict)');
+    expect(expandedArticles[1]).not.toHaveTextContent('90%');
   });
 
   it('invokes onClose when used as an overlay drawer', async () => {

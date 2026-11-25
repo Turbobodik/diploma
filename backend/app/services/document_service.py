@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.cache import project_cache
 from app.core.config import settings
-from app.core.constants import ALLOWED_MEDIA_EXTENSIONS, DocumentStatus, ErrorCode, JobKind, JobStatus
+from app.core.constants import ALLOWED_MEDIA_EXTENSIONS, DocumentStatus, ErrorCode, JobKind, JobStatus, MediaType
 from app.core.exceptions import (
     ConflictError,
     NotFoundError,
@@ -15,9 +15,9 @@ from app.core.exceptions import (
     UnprocessableError,
     UnsupportedMediaError,
 )
-from app.extraction import extract_document_text
+from app.extraction import extract_document_text, page_number_at
 from app.models.orm import AnalysisJob, Document
-from app.models.schemas import DocumentListOut, DocumentOut
+from app.models.schemas import DeleteOut, DocumentContextOut, DocumentListOut, DocumentOut
 from app.repositories.documents import DocumentRepository
 from app.repositories.projects import ProjectRepository
 
@@ -46,6 +46,59 @@ class DocumentService:
             raise NotFoundError("Project not found")
         docs, total = self._docs.list_by_project(project_id, limit=limit, offset=offset)
         return DocumentListOut(documents=[_to_doc_out(d) for d in docs], total=total, limit=limit, offset=offset)
+
+    def get_document_context(
+        self,
+        user_id: str,
+        project_id: str,
+        document_id: str,
+        *,
+        char_start: int,
+        char_end: int,
+        window: int = 900,
+    ) -> DocumentContextOut:
+        if self._projects.get_owned(project_id, user_id) is None:
+            raise NotFoundError("Project not found")
+        doc = self._docs.get_in_project(project_id, document_id)
+        if doc is None:
+            raise NotFoundError("Document not found")
+
+        text = doc.extracted_text or ""
+        total = len(text)
+        safe_start = max(0, min(char_start, total))
+        safe_end = max(safe_start, min(char_end, total))
+
+        win_start = max(0, safe_start - window)
+        win_end = min(total, safe_end + window)
+
+        # Snap outward/inward to whitespace boundaries so words aren't sliced mid-token.
+        if win_start > 0:
+            ws = text.rfind(" ", max(0, win_start - 40), win_start + 1)
+            nl = text.rfind("\n", max(0, win_start - 40), win_start + 1)
+            snap = max(ws, nl)
+            if snap != -1 and snap < safe_start:
+                win_start = snap + 1
+        if win_end < total:
+            ws = text.find(" ", win_end, min(total, win_end + 40))
+            nl = text.find("\n", win_end, min(total, win_end + 40))
+            candidates = [pos for pos in (ws, nl) if pos != -1]
+            if candidates:
+                win_end = min(candidates)
+
+        is_pdf = doc.media_type == MediaType.PDF.value
+        return DocumentContextOut(
+            document_id=doc.id,
+            document_name=doc.original_name,
+            page_no=page_number_at(text, safe_start, is_pdf=is_pdf) if total > 0 else None,
+            total_chars=total,
+            window_start=win_start,
+            window_end=win_end,
+            highlight_start=safe_start - win_start,
+            highlight_end=safe_end - win_start,
+            excerpt=text[win_start:win_end],
+            has_before=win_start > 0,
+            has_after=win_end < total,
+        )
 
     def upload_document(
         self,
@@ -131,3 +184,17 @@ class DocumentService:
         self._db.refresh(doc)
         project_cache.invalidate_prefix(f"project:{project_id}:")
         return _to_doc_out(doc)
+
+    def delete_document(self, user_id: str, project_id: str, document_id: str) -> DeleteOut:
+        if self._projects.get_owned(project_id, user_id) is None:
+            raise NotFoundError("Project not found")
+        doc = self._docs.get_in_project(project_id, document_id)
+        if doc is None:
+            raise NotFoundError("Document not found")
+        object_key = doc.object_key
+        self._docs.delete(doc)
+        project_cache.invalidate_prefix(f"project:{project_id}:")
+        stored_file = settings.storage_dir / object_key
+        if stored_file.exists():
+            stored_file.unlink(missing_ok=True)
+        return DeleteOut(deleted=document_id)

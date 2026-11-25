@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user_id
 from app.db import get_db
-from app.models.schemas import AuthOut, ErrorOut, LoginIn, RegisterIn, UserOut
+from app.models.schemas import AuthOut, ErrorOut, GuestDemoOut, LoginIn, RegisterIn, UserOut
 from app.repositories.users import UserRepository
 from app.services.auth_service import AuthService
 
@@ -36,6 +36,17 @@ def register(body: RegisterIn, db: Session = Depends(get_db)) -> AuthOut:
 )
 def login(body: LoginIn, db: Session = Depends(get_db)) -> AuthOut:
     return AuthService(db).login(body)
+
+
+@router.post(
+    "/guest",
+    response_model=GuestDemoOut,
+    status_code=201,
+    summary="Create an isolated guest session with a preloaded demo workspace for instant evaluation",
+    openapi_extra={"security": []},
+)
+def guest_demo(db: Session = Depends(get_db)) -> GuestDemoOut:
+    return AuthService(db).login_guest_demo()
 
 
 @router.get(

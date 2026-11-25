@@ -47,6 +47,10 @@ class AuthOut(BaseModel):
     user: UserOut
 
 
+class GuestDemoOut(AuthOut):
+    demo_project_id: str = Field(description="UUID of the preloaded demo workspace created for this guest session")
+
+
 class ProjectIn(BaseModel):
     name: str = Field(min_length=1, max_length=200, description="Unique project name per owner", examples=["Scientific NLI Literature Review"])
 
@@ -184,3 +188,56 @@ class OverrideIn(BaseModel):
 class OverrideOut(BaseModel):
     id: str = Field(description="Evidence edge UUID")
     user_label: NliLabelLiteral | None = Field(description="Updated override label")
+
+
+class DocumentContextOut(BaseModel):
+    document_id: str = Field(description="Document UUID")
+    document_name: str = Field(description="Original filename")
+    page_no: int | None = Field(default=None, description="1-based page number at char_start for PDFs")
+    total_chars: int = Field(description="Total length of extracted document text")
+    window_start: int = Field(description="Start offset of returned context window in document")
+    window_end: int = Field(description="Exclusive end offset of returned context window in document")
+    highlight_start: int = Field(description="Relative start offset of target span inside excerpt")
+    highlight_end: int = Field(description="Relative exclusive end offset of target span inside excerpt")
+    excerpt: str = Field(description="Surrounding document text containing the highlighted span")
+    has_before: bool = Field(description="Whether earlier text exists before window_start")
+    has_after: bool = Field(description="Whether additional text exists after window_end")
+
+
+class VerifyClaimIn(BaseModel):
+    claim_text: str = Field(
+        min_length=5,
+        max_length=1000,
+        description="Custom claim or hypothesis to verify against uploaded project documents",
+        examples=["Hybrid work improves employee retention in IT companies."],
+    )
+    top_k: int = Field(default=5, ge=1, le=20, description="Maximum candidate passages to inspect")
+    include_neutral: bool = Field(
+        default=True,
+        description="Whether to include neutral context passages in the response",
+    )
+
+
+class VerifyEvidenceOut(BaseModel):
+    passage_id: str | None = Field(default=None, description="Passage UUID if indexed in DB")
+    document_id: str = Field(description="Document UUID containing the matched passage")
+    document_name: str = Field(description="Filename of the source document")
+    page_no: int | None = Field(default=None, description="1-based page number for PDFs")
+    char_start: int = Field(description="Start character offset in extracted_text")
+    char_end: int = Field(description="Exclusive end character offset")
+    passage_text: str = Field(description="Verbatim excerpt from the source document")
+    retrieval_score: float = Field(description="Retrieval similarity score in [0, 1]")
+    model_name: str = Field(description="NLI model identifier")
+    model_label: NliLabelLiteral = Field(description="NLI prediction")
+    model_score: float = Field(description="NLI confidence score in [0, 1]")
+
+
+class VerifyClaimOut(BaseModel):
+    claim_text: str = Field(description="Submitted custom claim text")
+    verdict: Literal["supported", "refuted", "conflicting", "no_evidence"] = Field(
+        description="Aggregate verdict across retrieved passages"
+    )
+    ml_backend: str = Field(description="Active ML backend used for verification")
+    checked_passages: int = Field(description="Number of candidate passages evaluated by NLI")
+    evidence: list[VerifyEvidenceOut]
+

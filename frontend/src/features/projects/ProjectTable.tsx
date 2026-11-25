@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import { Badge } from '../../components/common/Badge';
@@ -12,6 +12,7 @@ export interface ProjectTableProps {
   sortDirection: SortDirection;
   deletingId: string | null;
   onSort: (field: ProjectSortField) => void;
+  onRenameRequest?: (project: ProjectItem) => void;
   onDeleteRequest: (project: ProjectItem) => void;
 }
 
@@ -40,6 +41,7 @@ export function ProjectTable({
   sortDirection,
   deletingId,
   onSort,
+  onRenameRequest,
   onDeleteRequest,
 }: ProjectTableProps) {
   return (
@@ -106,6 +108,17 @@ export function ProjectTable({
                       <ExternalLink size={14} aria-hidden="true" />
                       Open
                     </Link>
+                    {onRenameRequest ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Rename ${project.name}`}
+                        onClick={() => onRenameRequest(project)}
+                      >
+                        <Pencil size={14} aria-hidden="true" />
+                        Rename
+                      </Button>
+                    ) : null}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -142,6 +155,16 @@ export function ProjectTable({
                 <ExternalLink size={14} aria-hidden="true" />
                 Open workspace
               </Link>
+              {onRenameRequest ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  aria-label={`Rename ${project.name}`}
+                  onClick={() => onRenameRequest(project)}
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                </Button>
+              ) : null}
               <Button
                 variant="secondary"
                 size="sm"

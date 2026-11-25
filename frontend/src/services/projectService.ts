@@ -14,8 +14,18 @@ export const projectService = {
     return data;
   },
 
+  async getProject(projectId: string): Promise<ProjectItem> {
+    const { data } = await httpClient.get<ProjectItem>(`/api/v1/projects/${projectId}`);
+    return data;
+  },
+
   async createProject(payload: CreateProjectRequest): Promise<ProjectItem> {
     const { data } = await httpClient.post<ProjectItem>('/api/v1/projects', payload);
+    return data;
+  },
+
+  async renameProject(projectId: string, payload: CreateProjectRequest): Promise<ProjectItem> {
+    const { data } = await httpClient.patch<ProjectItem>(`/api/v1/projects/${projectId}`, payload);
     return data;
   },
 

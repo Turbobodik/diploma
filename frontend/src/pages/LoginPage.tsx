@@ -1,10 +1,10 @@
 import { BookOpen, CheckCircle2, FileText, Network } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { AuthForm, type AuthFormValues } from '../features/auth/AuthForm';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { clearAuthError, loginUser, registerUser } from '../store/authSlice';
+import { clearAuthError, loginGuestDemo, loginUser, registerUser } from '../store/authSlice';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 
 export default function LoginPage() {
@@ -13,12 +13,16 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, status, error } = useAppSelector((state) => state.auth);
+  const [guestPending, setGuestPending] = useState(false);
+  const demoRedirectRef = useRef<string | null>(null);
 
   const from = (location.state as { from?: string } | null)?.from || '/projects';
 
   useEffect(() => {
     if (user) {
-      navigate(from, { replace: true });
+      const target = demoRedirectRef.current ?? from;
+      demoRedirectRef.current = null;
+      navigate(target, { replace: true });
     }
   }, [user, navigate, from]);
 
@@ -38,6 +42,19 @@ export default function LoginPage() {
           password: values.password,
         }),
       );
+    }
+  };
+
+  const handleGuestDemo = async () => {
+    setGuestPending(true);
+    try {
+      const result = await dispatch(loginGuestDemo());
+      if (loginGuestDemo.fulfilled.match(result)) {
+        demoRedirectRef.current = `/projects/${result.payload.demoProjectId}`;
+        navigate(`/projects/${result.payload.demoProjectId}`, { replace: true });
+      }
+    } finally {
+      setGuestPending(false);
     }
   };
 
@@ -85,9 +102,11 @@ export default function LoginPage() {
 
       <main className="auth-form-column">
         <AuthForm
-          loading={status === 'loading'}
+          loading={status === 'loading' && !guestPending}
+          guestLoading={guestPending}
           serverError={error}
           onModeChange={() => dispatch(clearAuthError())}
+          onGuestDemo={handleGuestDemo}
           onSubmit={handleSubmit}
         />
       </main>

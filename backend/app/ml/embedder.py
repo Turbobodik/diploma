@@ -9,11 +9,19 @@ import numpy as np
 
 _TOKEN = re.compile(r"[a-zа-яё0-9]+")
 _CYRILLIC_RE = re.compile(r"^[а-яё]+$")
+_EN_STOPWORDS = {
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
+    "from", "as", "is", "are", "was", "were", "be", "been", "being", "it", "its", "this",
+    "that", "these", "those", "we", "our", "they", "their", "them", "which", "who", "whom",
+    "has", "have", "had", "into", "than", "then", "also", "such", "about", "between", "through",
+    "over", "under", "during", "while", "where", "when", "may", "can", "could", "would", "should",
+}
 _RU_STOPWORDS = {
     "в", "во", "и", "к", "с", "со", "о", "об", "у", "а", "но", "по", "на", "из", "за", "от", "до",
-    "для", "при", "как", "что", "это", "или", "же", "ли", "бы", "то", "их", "его", "ее", "они",
-    "мы", "вы", "все", "так", "также", "между", "через", "после", "среди", "которые", "которых",
-    "которая", "которое", "данной", "данных", "результате", "условиях",
+    "для", "при", "как", "что", "это", "этом", "этой", "этот", "или", "же", "ли", "бы", "то",
+    "их", "его", "ее", "они", "мы", "вы", "все", "так", "также", "между", "через", "после",
+    "среди", "которые", "которых", "которая", "которое", "данной", "данных", "результате",
+    "условиях", "были", "была", "было", "быть", "более", "менее", "очень", "только", "наши", "наших",
 }
 _RU_SUFFIXES = (
     "остью", "ости", "ость", "ениями", "ением", "ения", "ение", "ений", "аниями", "анием", "ания",
@@ -36,11 +44,18 @@ def normalize_token(token: str) -> str:
     return norm
 
 
-def tokenize_multilingual(text: str, *, drop_ru_stopwords: bool = True) -> list[str]:
+def tokenize_multilingual(
+    text: str,
+    *,
+    drop_ru_stopwords: bool = True,
+    drop_en_stopwords: bool = True,
+) -> list[str]:
     tokens = _TOKEN.findall(text.lower().replace("ё", "е"))
     out: list[str] = []
     for tok in tokens:
         if drop_ru_stopwords and tok in _RU_STOPWORDS:
+            continue
+        if drop_en_stopwords and tok in _EN_STOPWORDS:
             continue
         out.append(normalize_token(tok))
     return out

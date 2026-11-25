@@ -1,5 +1,6 @@
-import { Activity, MonitorSmartphone, Moon, RefreshCw, Sun } from 'lucide-react';
+import { Activity, MonitorSmartphone, Moon, Palette, RefreshCw, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Badge } from '../components/common/Badge';
 import { Button } from '../components/common/Button';
@@ -109,6 +110,17 @@ export default function SettingsPage() {
             value={scale}
             onChange={(event) => dispatch(setScale(event.target.value as DisplayScale))}
           />
+
+          <div className="cluster">
+            <Link
+              to="/design-system"
+              className="btn btn-secondary btn-sm"
+              id="open-design-system-link"
+            >
+              <Palette size={15} aria-hidden="true" />
+              Open UI Design System
+            </Link>
+          </div>
         </section>
 
         <section className="surface-card stack-md" aria-label="Adaptive device detection">

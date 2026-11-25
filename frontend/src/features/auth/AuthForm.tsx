@@ -1,5 +1,5 @@
-import { AlertCircle } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { AlertCircle, Clock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
@@ -15,8 +15,10 @@ export interface AuthFormValues {
 
 export interface AuthFormProps {
   loading?: boolean;
+  guestLoading?: boolean;
   serverError?: string | null;
   onModeChange?: (mode: AuthMode) => void;
+  onGuestDemo?: () => void | Promise<void>;
   onSubmit: (values: AuthFormValues) => void | Promise<void>;
 }
 
@@ -57,15 +59,30 @@ function validateAuthValues(values: AuthFormValues): FieldErrors {
 
 export function AuthForm({
   loading = false,
+  guestLoading = false,
   serverError = null,
   onModeChange,
+  onGuestDemo,
   onSubmit,
 }: AuthFormProps) {
   const [mode, setMode] = useState<AuthMode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
+  const [slowWake, setSlowWake] = useState(false);
+
+  const isBusy = loading || guestLoading;
+
+  useEffect(() => {
+    if (!isBusy) return;
+    const timer = window.setTimeout(() => setSlowWake(true), 3500);
+    return () => {
+      window.clearTimeout(timer);
+      setSlowWake(false);
+    };
+  }, [isBusy]);
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
@@ -118,7 +135,7 @@ export function AuthForm({
         <p className="text-muted">
           {mode === 'login'
             ? 'Access your scientific publications, claims, and NLI evidence maps.'
-            : 'Credentials are hashed with Argon2id and authenticated via Bearer JWT.'}
+            : 'Save uploaded papers, claim verifications, and custom overrides in private workspaces.'}
         </p>
       </div>
 
@@ -126,6 +143,15 @@ export function AuthForm({
         <div className="alert-banner error" role="alert">
           <AlertCircle size={18} aria-hidden="true" />
           <span>{serverError}</span>
+        </div>
+      ) : null}
+
+      {isBusy && slowWake ? (
+        <div className="alert-banner info" role="status" id="auth-cold-start-hint">
+          <Clock size={17} aria-hidden="true" />
+          <span>
+            Waking up the cloud server — the first request after inactivity can take 30–50 seconds.
+          </span>
         </div>
       ) : null}
 
@@ -161,26 +187,85 @@ export function AuthForm({
           required
         />
 
-        <Input
-          id="auth-password"
-          type="password"
-          label="Password"
-          placeholder={mode === 'register' ? 'Minimum 8 characters' : 'Enter your password'}
-          autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-          hint={mode === 'register' ? 'Use at least 8 characters.' : undefined}
-          value={password}
-          onChange={(e) => {
-            setPassword(e.target.value);
-            if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
-          }}
-          error={errors.password}
-          required
-        />
+        <div className="field">
+          <label className="field-label" htmlFor="auth-password">
+            Password
+          </label>
+          <div className="password-field-wrap">
+            <input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              className={`field-control password-field-input ${errors.password ? 'is-invalid' : ''}`}
+              placeholder={mode === 'register' ? 'Minimum 8 characters' : 'Enter your password'}
+              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
+              }}
+              aria-invalid={Boolean(errors.password) || undefined}
+              aria-describedby={
+                errors.password
+                  ? 'auth-password-error'
+                  : mode === 'register'
+                    ? 'auth-password-hint'
+                    : undefined
+              }
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle-btn"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+              id="auth-password-toggle"
+            >
+              {showPassword ? (
+                <EyeOff size={16} aria-hidden="true" />
+              ) : (
+                <Eye size={16} aria-hidden="true" />
+              )}
+            </button>
+          </div>
+          {errors.password ? (
+            <span id="auth-password-error" className="field-error" role="alert">
+              {errors.password}
+            </span>
+          ) : mode === 'register' ? (
+            <span id="auth-password-hint" className="field-hint">
+              Use at least 8 characters.
+            </span>
+          ) : null}
+        </div>
 
-        <Button type="submit" variant="primary" loading={loading} id="auth-submit-btn">
+        <Button
+          type="submit"
+          variant="primary"
+          loading={loading}
+          disabled={guestLoading}
+          id="auth-submit-btn"
+        >
           {mode === 'login' ? 'Sign in' : 'Create account'}
         </Button>
       </form>
+
+      {onGuestDemo ? (
+        <div className="auth-demo-divider stack-sm">
+          <span className="text-muted">Want to explore first without creating an account?</span>
+          <Button
+            type="button"
+            variant="secondary"
+            loading={guestLoading}
+            disabled={loading}
+            onClick={() => void onGuestDemo()}
+            id="auth-guest-demo-btn"
+          >
+            <Sparkles size={15} aria-hidden="true" />
+            Try instant demo workspace
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

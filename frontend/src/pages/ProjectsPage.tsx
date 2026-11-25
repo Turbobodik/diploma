@@ -20,6 +20,7 @@ import {
   createProject,
   deleteProject,
   fetchProjects,
+  renameProject,
   selectFilteredSortedProjects,
   setProjectSearch,
   setProjectSort,
@@ -41,6 +42,7 @@ export default function ProjectsPage() {
     status,
     creating,
     creatingDemo,
+    renamingId,
     deletingId,
     error,
     searchQuery,
@@ -50,6 +52,9 @@ export default function ProjectsPage() {
   } = useAppSelector((state) => state.projects);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [pendingRename, setPendingRename] = useState<ProjectItem | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ProjectItem | null>(null);
 
   useEffect(() => {
@@ -63,6 +68,34 @@ export default function ProjectsPage() {
       return true;
     }
     return false;
+  };
+
+  const handleOpenRename = (project: ProjectItem) => {
+    dispatch(clearProjectsError());
+    setPendingRename(project);
+    setRenameValue(project.name);
+    setRenameError(null);
+  };
+
+  const handleConfirmRename = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pendingRename) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameError('Project name is required.');
+      return;
+    }
+    if (trimmed.length > 200) {
+      setRenameError('Project name must be 200 characters or fewer.');
+      return;
+    }
+    const result = await dispatch(renameProject({ projectId: pendingRename.id, name: trimmed }));
+    if (renameProject.fulfilled.match(result)) {
+      setPendingRename(null);
+      setRenameError(null);
+    } else if (renameProject.rejected.match(result)) {
+      setRenameError(result.payload ?? 'Could not rename project.');
+    }
   };
 
   const handleLaunchDemo = async () => {
@@ -95,7 +128,7 @@ export default function ProjectsPage() {
             id="launch-demo-project-btn"
           >
             <Sparkles size={16} aria-hidden="true" />
-            Пример: КиберЛенинка (RU)
+            Demo: CyberLeninka (RU)
           </Button>
           <Button
             variant="secondary"
@@ -125,10 +158,10 @@ export default function ProjectsPage() {
         aria-label="Russian CyberLeninka demo example"
       >
         <div className="stack-sm flex-1">
-          <strong>Готовый пример на русском: 2 статьи с КиберЛенинки по спорной теме</strong>
+          <strong>Ready-to-run multilingual demo: 2 Russian CyberLeninka papers</strong>
           <p className="text-secondary">
-            Удалённая работа и продуктивность IT-специалистов — система в один клик загрузит обе
-            статьи, выделит тезисы и покажет подтверждения (зелёные) и противоречия (красные).
+            Remote work and IT specialist productivity — loads both Russian-language papers in one
+            click, extracts claims, and maps supporting (green) vs. contradicting (red) evidence.
           </p>
         </div>
         <Button
@@ -139,7 +172,7 @@ export default function ProjectsPage() {
           id="launch-demo-banner-btn"
         >
           <Sparkles size={15} aria-hidden="true" />
-          Запустить пример
+          Launch demo
         </Button>
       </section>
 
@@ -194,7 +227,7 @@ export default function ProjectsPage() {
                   loading={creatingDemo}
                 >
                   <Sparkles size={16} aria-hidden="true" />
-                  Запустить пример (КиберЛенинка)
+                  Launch CyberLeninka demo (RU)
                 </Button>
                 <Button variant="secondary" onClick={() => setCreateModalOpen(true)}>
                   <Plus size={16} aria-hidden="true" />
@@ -211,6 +244,7 @@ export default function ProjectsPage() {
           sortDirection={sortDirection}
           deletingId={deletingId}
           onSort={(field) => dispatch(setProjectSort({ field }))}
+          onRenameRequest={handleOpenRename}
           onDeleteRequest={(project) => setPendingDelete(project)}
         />
       )}
@@ -226,6 +260,39 @@ export default function ProjectsPage() {
           onSubmit={handleCreate}
           onCancel={() => setCreateModalOpen(false)}
         />
+      </Modal>
+
+      <Modal
+        open={pendingRename !== null}
+        title="Rename project"
+        onClose={() => setPendingRename(null)}
+      >
+        <form className="stack-md" onSubmit={(event) => void handleConfirmRename(event)}>
+          <Input
+            id="rename-project-input"
+            label="Project name"
+            value={renameValue}
+            onChange={(event) => {
+              setRenameValue(event.target.value);
+              if (renameError) setRenameError(null);
+            }}
+            error={renameError ?? undefined}
+            required
+          />
+          <div className="cluster">
+            <Button
+              type="submit"
+              variant="primary"
+              loading={renamingId === pendingRename?.id}
+              id="confirm-rename-project-btn"
+            >
+              Save name
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setPendingRename(null)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal

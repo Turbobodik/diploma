@@ -56,7 +56,15 @@ class DocumentRepository:
         )
         return ready, in_progress
 
+    def get_in_project(self, project_id: str, document_id: str) -> Document | None:
+        stmt = select(Document).where(Document.project_id == project_id, Document.id == document_id)
+        return self._db.scalar(stmt)
+
     def create(self, document: Document) -> Document:
         self._db.add(document)
         self._db.flush()
         return document
+
+    def delete(self, document: Document) -> None:
+        self._db.delete(document)
+        self._db.commit()

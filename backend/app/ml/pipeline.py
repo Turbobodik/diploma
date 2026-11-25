@@ -293,6 +293,8 @@ def run_project_pipeline(
                         if same_doc and overlaps:
                             continue
                         clamped = float(max(0.0, min(1.0, float(scores_row[pi]))))
+                        if clamped < active_cfg.min_retrieval_score:
+                            continue
                         ranked.append((clamped, passage))
 
                     ranked.sort(key=lambda item: item[0], reverse=True)

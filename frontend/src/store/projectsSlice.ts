@@ -17,6 +17,7 @@ export interface ProjectsState {
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
   creating: boolean;
   creatingDemo: boolean;
+  renamingId: string | null;
   deletingId: string | null;
   error: string | null;
   searchQuery: string;
@@ -30,6 +31,7 @@ const initialState: ProjectsState = {
   status: 'idle',
   creating: false,
   creatingDemo: false,
+  renamingId: null,
   deletingId: null,
   error: null,
   searchQuery: '',
@@ -70,6 +72,34 @@ export const createProject = createAsyncThunk<
   }
 });
 
+export const renameProject = createAsyncThunk<
+  ProjectItem,
+  { projectId: string; name: string },
+  { rejectValue: string }
+>('projects/rename', async ({ projectId, name }, { dispatch, rejectWithValue }) => {
+  try {
+    const updated = await projectService.renameProject(projectId, { name });
+    dispatch(
+      pushToast({
+        variant: 'success',
+        title: 'Project renamed',
+        description: updated.name,
+      }),
+    );
+    return updated;
+  } catch (err) {
+    const normalized = normalizeAxiosError(err);
+    dispatch(
+      pushToast({
+        variant: 'error',
+        title: 'Could not rename project',
+        description: normalized.message,
+      }),
+    );
+    return rejectWithValue(normalized.message);
+  }
+});
+
 export const createDemoProject = createAsyncThunk<
   ProjectItem,
   string | undefined,
@@ -80,8 +110,8 @@ export const createDemoProject = createAsyncThunk<
     dispatch(
       pushToast({
         variant: 'success',
-        title: 'Пример создан',
-        description: 'Загружены 2 статьи с КиберЛенинки — открываем карту доказательств.',
+        title: 'Demo workspace created',
+        description: 'Loaded 2 Russian CyberLeninka papers — opening the evidence map.',
       }),
     );
     return created;
@@ -90,7 +120,7 @@ export const createDemoProject = createAsyncThunk<
     dispatch(
       pushToast({
         variant: 'error',
-        title: 'Не удалось запустить пример',
+        title: 'Could not launch demo',
         description: normalized.message,
       }),
     );
@@ -174,6 +204,23 @@ export const projectsSlice = createSlice({
       .addCase(createProject.rejected, (state, action) => {
         state.creating = false;
         state.error = action.payload ?? 'Failed to create project.';
+      })
+      .addCase(renameProject.pending, (state, action) => {
+        state.renamingId = action.meta.arg.projectId;
+        state.error = null;
+      })
+      .addCase(renameProject.fulfilled, (state, action) => {
+        state.renamingId = null;
+        const idx = state.items.findIndex((p) => p.id === action.payload.id);
+        if (idx >= 0) {
+          state.items[idx] = action.payload;
+        } else {
+          state.items.unshift(action.payload);
+        }
+      })
+      .addCase(renameProject.rejected, (state, action) => {
+        state.renamingId = null;
+        state.error = action.payload ?? 'Failed to rename project.';
       })
       .addCase(createDemoProject.pending, (state) => {
         state.creatingDemo = true;

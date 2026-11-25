@@ -96,6 +96,38 @@ class ProjectService:
             created_at=proj.created_at.isoformat(),
         )
 
+    def get_project(self, user_id: str, project_id: str) -> ProjectOut:
+        found = self._projects.get_owned_with_counts(project_id, user_id)
+        if found is None:
+            raise NotFoundError("Project not found")
+        proj, doc_cnt, claim_cnt = found
+        return ProjectOut(
+            id=proj.id,
+            name=proj.name,
+            document_count=doc_cnt,
+            claim_count=claim_cnt,
+            created_at=proj.created_at.isoformat(),
+        )
+
+    def rename_project(self, user_id: str, project_id: str, body: ProjectIn) -> ProjectOut:
+        name = body.name.strip()
+        if not name:
+            raise UnprocessableError(ErrorCode.EMPTY_NAME, "Project name is empty")
+        found = self._projects.get_owned_with_counts(project_id, user_id)
+        if found is None:
+            raise NotFoundError("Project not found")
+        proj, doc_cnt, claim_cnt = found
+        if self._projects.exists_name_for_owner(user_id, name, exclude_project_id=proj.id):
+            raise ConflictError(ErrorCode.DUPLICATE_NAME, "You already have a project with this name")
+        updated = self._projects.rename(proj, name)
+        return ProjectOut(
+            id=updated.id,
+            name=updated.name,
+            document_count=doc_cnt,
+            claim_count=claim_cnt,
+            created_at=updated.created_at.isoformat(),
+        )
+
     def delete_project(self, user_id: str, project_id: str) -> DeleteOut:
         project = self._projects.get_owned(project_id, user_id)
         if project is None:

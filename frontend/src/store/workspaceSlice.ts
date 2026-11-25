@@ -8,7 +8,9 @@ import {
 import type { ClaimItem, DocumentItem, GraphResponse, JobItem, NliLabel } from '../models/api';
 import type { ClaimSortField, SortDirection } from '../models/ui';
 import { normalizeAxiosError } from '../services/httpClient';
+import { projectService } from '../services/projectService';
 import { workspaceService } from '../services/workspaceService';
+import { renameProject } from './projectsSlice';
 import { pushToast } from './uiSlice';
 
 export interface WorkspaceFilters {
@@ -16,21 +18,52 @@ export interface WorkspaceFilters {
   documentId: string;
   search: string;
   includeNeutral: boolean;
+  crossDocumentOnly: boolean;
   sortField: ClaimSortField;
   sortDirection: SortDirection;
 }
 
+export interface VerdictCounts {
+  all: number;
+  contradiction: number;
+  entailment: number;
+  neutral: number;
+}
+
+function computeVerdictCounts(claims: ClaimItem[]): VerdictCounts {
+  let contradiction = 0;
+  let entailment = 0;
+  let neutral = 0;
+  for (const claim of claims) {
+    let hasContra = false;
+    let hasEntail = false;
+    let hasNeutral = false;
+    for (const edge of claim.evidence) {
+      if (edge.effective_label === 'contradiction') hasContra = true;
+      else if (edge.effective_label === 'entailment') hasEntail = true;
+      else hasNeutral = true;
+    }
+    if (hasContra) contradiction += 1;
+    if (hasEntail) entailment += 1;
+    if (hasNeutral) neutral += 1;
+  }
+  return { all: claims.length, contradiction, entailment, neutral };
+}
+
 export interface WorkspaceState {
   projectId: string | null;
+  projectName: string | null;
   documents: DocumentItem[];
   jobs: JobItem[];
   claims: ClaimItem[];
   claimsTotal: number;
+  verdictCounts: VerdictCounts;
   graph: GraphResponse | null;
   selectedClaimId: string | null;
   filters: WorkspaceFilters;
   loading: boolean;
   uploading: boolean;
+  deletingDocumentId: string | null;
   analyzing: boolean;
   overridingEvidenceId: string | null;
   error: string | null;
@@ -40,22 +73,33 @@ const initialFilters: WorkspaceFilters = {
   label: 'all',
   documentId: '',
   search: '',
-  includeNeutral: true,
+  includeNeutral: false,
+  crossDocumentOnly: false,
   sortField: 'confidence',
   sortDirection: 'desc',
 };
 
+const EMPTY_VERDICT_COUNTS: VerdictCounts = {
+  all: 0,
+  contradiction: 0,
+  entailment: 0,
+  neutral: 0,
+};
+
 const initialState: WorkspaceState = {
   projectId: null,
+  projectName: null,
   documents: [],
   jobs: [],
   claims: [],
   claimsTotal: 0,
+  verdictCounts: EMPTY_VERDICT_COUNTS,
   graph: null,
   selectedClaimId: null,
   filters: initialFilters,
   loading: false,
   uploading: false,
+  deletingDocumentId: null,
   analyzing: false,
   overridingEvidenceId: null,
   error: null,
@@ -64,6 +108,7 @@ const initialState: WorkspaceState = {
 export const loadWorkspace = createAsyncThunk<
   {
     projectId: string;
+    projectName: string | null;
     documents: DocumentItem[];
     jobs: JobItem[];
     claims: ClaimItem[];
@@ -74,13 +119,15 @@ export const loadWorkspace = createAsyncThunk<
   { rejectValue: string }
 >('workspace/load', async (projectId, { rejectWithValue }) => {
   try {
-    const [docsRes, claimsRes, graphRes] = await Promise.all([
+    const [projectMeta, docsRes, claimsRes, graphRes] = await Promise.all([
+      projectService.getProject(projectId).catch(() => null),
       workspaceService.listDocuments(projectId, 100, 0),
       workspaceService.listClaims(projectId, { limit: 100, offset: 0 }),
-      workspaceService.getGraph(projectId, { include_neutral: true }),
+      workspaceService.getGraph(projectId, { include_neutral: false }),
     ]);
     return {
       projectId,
+      projectName: projectMeta?.name ?? null,
       documents: docsRes.documents,
       jobs: claimsRes.jobs,
       claims: claimsRes.claims,
@@ -100,6 +147,7 @@ export const refreshClaimsAndGraph = createAsyncThunk<
     documentId?: string;
     search?: string;
     includeNeutral: boolean;
+    crossDocumentOnly: boolean;
   },
   { rejectValue: string }
 >('workspace/refreshClaimsAndGraph', async (arg, { rejectWithValue }) => {
@@ -109,6 +157,7 @@ export const refreshClaimsAndGraph = createAsyncThunk<
         label: arg.label,
         document_id: arg.documentId || undefined,
         search: arg.search?.trim() || undefined,
+        cross_document_only: arg.crossDocumentOnly || undefined,
         limit: 100,
         offset: 0,
       }),
@@ -116,6 +165,7 @@ export const refreshClaimsAndGraph = createAsyncThunk<
         label: arg.label,
         document_id: arg.documentId || undefined,
         include_neutral: arg.includeNeutral,
+        cross_document_only: arg.crossDocumentOnly || undefined,
       }),
     ]);
     return {
@@ -156,6 +206,37 @@ export const uploadDocumentThunk = createAsyncThunk<
     return rejectWithValue(normalized.message);
   }
 });
+
+export const deleteDocumentThunk = createAsyncThunk<
+  string,
+  { projectId: string; documentId: string; documentName: string },
+  { rejectValue: string }
+>(
+  'workspace/deleteDocument',
+  async ({ projectId, documentId, documentName }, { dispatch, rejectWithValue }) => {
+    try {
+      await workspaceService.deleteDocument(projectId, documentId);
+      dispatch(
+        pushToast({
+          variant: 'info',
+          title: 'Document removed',
+          description: `${documentName} and its extracted passages were deleted.`,
+        }),
+      );
+      return documentId;
+    } catch (err) {
+      const normalized = normalizeAxiosError(err);
+      dispatch(
+        pushToast({
+          variant: 'error',
+          title: 'Could not remove document',
+          description: normalized.message,
+        }),
+      );
+      return rejectWithValue(normalized.message);
+    }
+  },
+);
 
 export const startAnalysisThunk = createAsyncThunk<
   JobItem[],
@@ -248,6 +329,16 @@ export const workspaceSlice = createSlice({
     setIncludeNeutral(state, action: PayloadAction<boolean>) {
       state.filters.includeNeutral = action.payload;
     },
+    setCrossDocumentOnly(state, action: PayloadAction<boolean>) {
+      state.filters.crossDocumentOnly = action.payload;
+    },
+    resetWorkspaceFilters(state) {
+      state.filters = {
+        ...initialFilters,
+        sortField: state.filters.sortField,
+        sortDirection: state.filters.sortDirection,
+      };
+    },
     setClaimSort(
       state,
       action: PayloadAction<{ field: ClaimSortField; direction?: SortDirection }>,
@@ -270,6 +361,7 @@ export const workspaceSlice = createSlice({
         state.error = null;
         if (state.projectId !== action.meta.arg) {
           state.projectId = action.meta.arg;
+          state.projectName = null;
           state.selectedClaimId = null;
           state.filters = initialFilters;
         }
@@ -277,10 +369,14 @@ export const workspaceSlice = createSlice({
       .addCase(loadWorkspace.fulfilled, (state, action) => {
         state.loading = false;
         state.projectId = action.payload.projectId;
+        if (action.payload.projectName) {
+          state.projectName = action.payload.projectName;
+        }
         state.documents = action.payload.documents;
         state.jobs = action.payload.jobs;
         state.claims = action.payload.claims;
         state.claimsTotal = action.payload.claimsTotal;
+        state.verdictCounts = computeVerdictCounts(action.payload.claims);
         state.graph = action.payload.graph;
         if (
           !state.selectedClaimId ||
@@ -293,9 +389,17 @@ export const workspaceSlice = createSlice({
         state.loading = false;
         state.error = action.payload ?? 'Failed to load project workspace.';
       })
+      .addCase(renameProject.fulfilled, (state, action) => {
+        if (state.projectId === action.payload.id) {
+          state.projectName = action.payload.name;
+        }
+      })
       .addCase(refreshClaimsAndGraph.fulfilled, (state, action) => {
         state.claims = action.payload.claims;
         state.claimsTotal = action.payload.claimsTotal;
+        if (!action.meta.arg.label) {
+          state.verdictCounts = computeVerdictCounts(action.payload.claims);
+        }
         state.jobs = action.payload.jobs;
         state.graph = action.payload.graph;
         if (
@@ -314,6 +418,19 @@ export const workspaceSlice = createSlice({
       })
       .addCase(uploadDocumentThunk.rejected, (state) => {
         state.uploading = false;
+      })
+      .addCase(deleteDocumentThunk.pending, (state, action) => {
+        state.deletingDocumentId = action.meta.arg.documentId;
+      })
+      .addCase(deleteDocumentThunk.fulfilled, (state, action) => {
+        state.deletingDocumentId = null;
+        state.documents = state.documents.filter((doc) => doc.id !== action.payload);
+        if (state.filters.documentId === action.payload) {
+          state.filters.documentId = '';
+        }
+      })
+      .addCase(deleteDocumentThunk.rejected, (state) => {
+        state.deletingDocumentId = null;
       })
       .addCase(startAnalysisThunk.pending, (state) => {
         state.analyzing = true;
@@ -347,6 +464,9 @@ export const workspaceSlice = createSlice({
           }
           claim.has_evidence = hasNonNeutral;
         }
+        if (state.filters.label === 'all') {
+          state.verdictCounts = computeVerdictCounts(state.claims);
+        }
         if (state.graph) {
           for (const edge of state.graph.edges) {
             if (edge.id === evidenceId || edge.id === `ev:${evidenceId}`) {
@@ -368,6 +488,8 @@ export const {
   setWorkspaceDocumentFilter,
   setWorkspaceSearch,
   setIncludeNeutral,
+  setCrossDocumentOnly,
+  resetWorkspaceFilters,
   setClaimSort,
   resetWorkspace,
 } = workspaceSlice.actions;

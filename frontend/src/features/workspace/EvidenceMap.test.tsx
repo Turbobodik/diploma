@@ -207,29 +207,119 @@ describe('EvidenceMap', () => {
     expect(onSelectPassage).toHaveBeenCalledWith('p1');
   });
 
-  it('switches cleanly between Острова, Весы, and Созвездие layouts with highlighted edge labels', async () => {
+  it('switches cleanly between Islands, Scales, and Constellation layouts with highlighted edge labels', async () => {
     const user = userEvent.setup();
     const { container } = render(
       <EvidenceMap graph={SAMPLE_GRAPH} selectedClaimId="c1" onSelectClaim={vi.fn()} />,
     );
 
-    // Default for small graph is Острова (clusters)
-    expect(screen.getByRole('button', { name: 'Острова' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/ПОДТВЕРЖДЁННЫЕ ФАКТЫ/i)).toBeInTheDocument();
+    // Default for small graph is Islands (clusters)
+    expect(screen.getByRole('button', { name: 'Islands' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/SUPPORTED CLAIMS/i)).toBeInTheDocument();
     expect(container.querySelectorAll('.graph-edge-pill-active').length).toBeGreaterThanOrEqual(1);
 
-    // Switch to Весы (balance)
-    await user.click(screen.getByRole('button', { name: 'Весы' }));
-    expect(screen.getByRole('button', { name: 'Весы' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/ПРОТИВ \/ ОПРОВЕРГАЮТ/i)).toBeInTheDocument();
-    expect(screen.getByText(/ЗА \/ ПОДТВЕРЖДАЮТ/i)).toBeInTheDocument();
+    // Switch to Scales (balance)
+    await user.click(screen.getByRole('button', { name: 'Scales' }));
+    expect(screen.getByRole('button', { name: 'Scales' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/REFUTES \/ CONTRADICTS/i)).toBeInTheDocument();
+    expect(screen.getByText(/SUPPORTS \/ ENTAILS/i)).toBeInTheDocument();
 
-    // Switch to Созвездие (constellation)
-    await user.click(screen.getByRole('button', { name: 'Созвездие' }));
-    expect(screen.getByRole('button', { name: 'Созвездие' })).toHaveAttribute(
+    // Switch to Constellation
+    await user.click(screen.getByRole('button', { name: 'Constellation' }));
+    expect(screen.getByRole('button', { name: 'Constellation' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     expect(screen.getByRole('button', { name: /document: paper_a\.txt/i })).toBeInTheDocument();
+  });
+
+  it('omits confusing percentages on neutral context edges', () => {
+    const neutralGraph: GraphResponse = {
+      ...SAMPLE_GRAPH,
+      edges: [
+        SAMPLE_GRAPH.edges[0],
+        {
+          ...SAMPLE_GRAPH.edges[1],
+          label: 'neutral',
+          model_label: 'neutral',
+          score: 0.87,
+        },
+      ],
+    };
+
+    const { container } = render(
+      <EvidenceMap graph={neutralGraph} selectedClaimId="c1" onSelectClaim={vi.fn()} />,
+    );
+
+    // Switch to Scales (balance) where neutral context is rendered
+    expect(container.textContent).not.toContain('87%');
+  });
+
+  it('supports keyboard ArrowRight stepping, shows +N more pill, and offers Reset filters when empty', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const onResetFilters = vi.fn();
+
+    // 1. Filtered empty state offers Reset filters button
+    const { rerender } = render(
+      <EvidenceMap
+        graph={{ project_id: 'p1', nodes: [], edges: [] }}
+        selectedClaimId={null}
+        hasActiveFilters
+        onSelectClaim={onSelect}
+        onResetFilters={onResetFilters}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Reset filters/i }));
+    expect(onResetFilters).toHaveBeenCalledTimes(1);
+
+    // 2. Claim with 5 evidence passages shows "+1 more evidence in Inspector" pill + ArrowRight steps claims
+    const nodes: GraphResponse['nodes'] = [
+      ...SAMPLE_GRAPH.nodes,
+      {
+        id: 'claim:c2',
+        type: 'claim',
+        label: 'Second extracted claim for keyboard stepping.',
+        document_id: 'd1',
+        page_no: 2,
+        has_evidence: true,
+        confidence: 0.88,
+      },
+    ];
+    const edges: GraphResponse['edges'] = [...SAMPLE_GRAPH.edges];
+    for (let i = 2; i <= 5; i += 1) {
+      nodes.push({
+        id: `passage:p${i}`,
+        type: 'passage',
+        label: `Extra supporting passage number ${i}.`,
+        document_id: 'd1',
+        page_no: i,
+        has_evidence: null,
+        confidence: null,
+      });
+      edges.push({
+        id: `ev:e${i}`,
+        source: 'passage:p' + i,
+        target: 'claim:c1',
+        kind: 'evidence',
+        label: 'entailment',
+        model_label: 'entailment',
+        user_label: null,
+        score: 0.8,
+      });
+    }
+
+    rerender(
+      <EvidenceMap
+        graph={{ project_id: 'p1', nodes, edges }}
+        selectedClaimId="c1"
+        onSelectClaim={onSelect}
+      />,
+    );
+
+    expect(screen.getByText(/\+1 more evidence in Inspector/i)).toBeInTheDocument();
+
+    await user.keyboard('{ArrowRight}');
+    expect(onSelect).toHaveBeenCalledWith('c2');
   });
 });

@@ -53,4 +53,22 @@ describe('AuthForm', () => {
     render(<AuthForm serverError="Invalid email or password" onSubmit={vi.fn()} />);
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid email or password');
   });
+
+  it('toggles password visibility and triggers instant guest demo', async () => {
+    const user = userEvent.setup();
+    const onGuestDemo = vi.fn();
+    render(<AuthForm onSubmit={vi.fn()} onGuestDemo={onGuestDemo} />);
+
+    const passwordInput = screen.getByLabelText('Password') as HTMLInputElement;
+    expect(passwordInput.type).toBe('password');
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(passwordInput.type).toBe('text');
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(passwordInput.type).toBe('password');
+
+    await user.click(screen.getByRole('button', { name: /Try instant demo workspace/i }));
+    expect(onGuestDemo).toHaveBeenCalledTimes(1);
+  });
 });

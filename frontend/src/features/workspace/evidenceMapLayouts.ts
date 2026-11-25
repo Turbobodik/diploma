@@ -45,10 +45,20 @@ export interface LayoutEdge {
   targetKey: string;
 }
 
+export interface LayoutOverflowPill {
+  key: string;
+  claimNodeId: string;
+  hiddenCount: number;
+  x: number;
+  y: number;
+  width: number;
+}
+
 export interface ComputedMapLayout {
   zones: LayoutZone[];
   cards: LayoutCard[];
   edges: LayoutEdge[];
+  overflowPills?: LayoutOverflowPill[];
   canvasWidth: number;
   canvasHeight: number;
 }
@@ -79,16 +89,16 @@ export function verdictBg(verdict: ClaimVerdict): string {
 }
 
 export function verdictText(verdict: ClaimVerdict): string {
-  if (verdict === 'supported') return 'ДОКАЗАНО';
-  if (verdict === 'refuted') return 'ОПРОВЕРГНУТО';
-  if (verdict === 'conflicting') return 'СПОРНО';
-  return 'НЕТ ДАННЫХ';
+  if (verdict === 'supported') return 'SUPPORTED';
+  if (verdict === 'refuted') return 'REFUTED';
+  if (verdict === 'conflicting') return 'CONFLICTING';
+  return 'NO VERDICT';
 }
 
 export function shortVerdictEdgeLabel(label: NliLabel | null | undefined): string {
-  if (label === 'entailment') return 'подтверждает';
-  if (label === 'contradiction') return 'опровергает';
-  return 'нейтрально';
+  if (label === 'entailment') return 'Supports';
+  if (label === 'contradiction') return 'Refutes';
+  return 'Context';
 }
 
 export function computeClaimVerdict(edges: GraphEdge[]): {
@@ -162,10 +172,14 @@ function buildGraphIndexes(graph: GraphResponse) {
     }
   }
 
-  for (const list of evidenceByClaim.values()) {
+  for (const [claimId, list] of evidenceByClaim.entries()) {
+    const claimDocId = nodeById.get(claimId)?.document_id;
     list.sort((a, b) => {
       const diff = labelRank(a.edge.label) - labelRank(b.edge.label);
       if (diff !== 0) return diff;
+      const aCross = claimDocId && a.passage.document_id !== claimDocId ? 1 : 0;
+      const bCross = claimDocId && b.passage.document_id !== claimDocId ? 1 : 0;
+      if (aCross !== bCross) return bCross - aCross;
       return (b.edge.score ?? 0) - (a.edge.score ?? 0);
     });
   }
@@ -174,7 +188,7 @@ function buildGraphIndexes(graph: GraphResponse) {
 }
 
 /**
- * Mode 1: Verdict Islands ("Острова")
+ * Mode 1: Verdict Islands ("Islands")
  * Groups claims into semantic color-coded zones (Conflicts/Refuted -> Supported -> Unverified)
  * with each claim's evidence placed directly beside it (zero spaghetti crossings).
  */
@@ -209,6 +223,7 @@ export function computeClustersLayout(
   const zones: LayoutZone[] = [];
   const cards: LayoutCard[] = [];
   const edges: LayoutEdge[] = [];
+  const overflowPills: LayoutOverflowPill[] = [];
 
   const zoneX = 16;
   const zoneWidth = 824;
@@ -219,6 +234,7 @@ export function computeClustersLayout(
   const claimH = 104;
   const passageH = 92;
   const passageGap = 12;
+  const overflowPillH = 26;
   const rowGap = 20;
 
   let cursorY = 16;
@@ -238,9 +254,12 @@ export function computeClustersLayout(
       const evList = evidenceByClaim.get(claim.id) ?? [];
       const meta = metaByClaim.get(claim.id)!;
       const visibleEv = evList.slice(0, 4);
+      const hiddenCount = Math.max(0, evList.length - visibleEv.length);
       const passagesStackH =
         visibleEv.length > 0
-          ? visibleEv.length * passageH + Math.max(0, visibleEv.length - 1) * passageGap
+          ? visibleEv.length * passageH +
+            Math.max(0, visibleEv.length - 1) * passageGap +
+            (hiddenCount > 0 ? passageGap + overflowPillH : 0)
           : claimH;
       const rowH = Math.max(claimH, passagesStackH);
       const claimY = innerY + Math.round((rowH - claimH) / 2);
@@ -301,6 +320,18 @@ export function computeClustersLayout(
         });
       });
 
+      if (hiddenCount > 0) {
+        const pillY = innerY + visibleEv.length * (passageH + passageGap);
+        overflowPills.push({
+          key: `overflow:${claim.id}`,
+          claimNodeId: claim.id,
+          hiddenCount,
+          x: passageX,
+          y: pillY,
+          width: passageW,
+        });
+      }
+
       innerY += rowH + rowGap;
     }
 
@@ -320,16 +351,16 @@ export function computeClustersLayout(
 
   renderEvidenceZone(
     'zone-refuted',
-    `ПРОТИВОРЕЧИЯ И СПОРЫ (${refutedGroup.length})`,
-    'Тезисы, которые опровергаются или оспариваются другими фрагментами',
+    `CONTRADICTIONS & DISPUTES (${refutedGroup.length})`,
+    'Claims refuted or contested by passages in the corpus',
     'contradiction',
     refutedGroup,
   );
 
   renderEvidenceZone(
     'zone-supported',
-    `ПОДТВЕРЖДЁННЫЕ ФАКТЫ (${supportedGroup.length})`,
-    'Тезисы, нашедшие прямое подтверждение в корпусе',
+    `SUPPORTED CLAIMS (${supportedGroup.length})`,
+    'Claims backed by direct supporting passages in the corpus',
     'entailment',
     supportedGroup,
   );
@@ -367,8 +398,8 @@ export function computeClustersLayout(
     const zoneHeight = 48 + rowsCount * cardH + Math.max(0, rowsCount - 1) * gap + 18;
     zones.push({
       id: 'zone-unverified',
-      title: `БЕЗ ДОКАЗАТЕЛЬСТВ (${unverifiedGroup.length})`,
-      subtitle: 'Утверждения, для которых пока найдены только нейтральные фрагменты',
+      title: `UNVERIFIED CLAIMS (${unverifiedGroup.length})`,
+      subtitle: 'Claims with no supporting or contradicting passages yet',
       tone: 'neutral',
       x: zoneX,
       y: zoneTop,
@@ -382,15 +413,16 @@ export function computeClustersLayout(
     zones,
     cards,
     edges,
+    overflowPills,
     canvasWidth: zoneWidth + 32,
     canvasHeight: Math.max(420, cursorY + 12),
   };
 }
 
 /**
- * Mode 2: Argument Scales ("Весы")
+ * Mode 2: Argument Scales ("Scales")
  * Selected claim sits at the center with source doc above, REFUTES on the left wing,
- * SUPPORTS on the right wing, and NEUTRAL passages neatly below.
+ * SUPPORTS on the right wing, and checked neutral context passages neatly below.
  */
 export function computeBalanceLayout(
   graph: GraphResponse,
@@ -438,7 +470,7 @@ export function computeBalanceLayout(
   // Left (Refutes) & Right (Supports) backdrop zones
   zones.push({
     id: 'balance-left',
-    title: `ПРОТИВ / ОПРОВЕРГАЮТ (${refutes.length})`,
+    title: `REFUTES / CONTRADICTS (${refutes.length})`,
     tone: 'contradiction',
     x: leftX - 8,
     y: wingHeaderY,
@@ -448,7 +480,7 @@ export function computeBalanceLayout(
 
   zones.push({
     id: 'balance-right',
-    title: `ЗА / ПОДТВЕРЖДАЮТ (${supports.length})`,
+    title: `SUPPORTS / ENTAILS (${supports.length})`,
     tone: 'entailment',
     x: rightX - 8,
     y: wingHeaderY,
@@ -599,7 +631,7 @@ export function computeBalanceLayout(
 
     zones.push({
       id: 'balance-neutral',
-      title: `НЕЙТРАЛЬНЫЙ КОНТЕКСТ (${neutrals.length})`,
+      title: `CHECKED CONTEXT — NO VERDICT (${neutrals.length})`,
       tone: 'neutral',
       x: 12,
       y: nZoneY,
@@ -663,7 +695,7 @@ export function computeBalanceLayout(
 }
 
 /**
- * Mode 3: Constellation Network ("Созвездие")
+ * Mode 3: Constellation Network ("Constellation")
  * Places documents as anchor hubs at the top, verdict-colored claims on a central arc,
  * and evidence passages orbiting their linked claims.
  */

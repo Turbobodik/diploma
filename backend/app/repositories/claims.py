@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.orm import AnalysisJob, Claim, ClaimEvidence, Document, Passage, Project
+from app.models.orm import AnalysisJob, Claim, ClaimEvidence, Document, Passage, PassageEmbedding, Project
 
 
 class ClaimRepository:
@@ -36,6 +36,24 @@ class ClaimRepository:
             .order_by(ClaimEvidence.model_score.desc())
         )
         return [(ev, passage, str(name)) for ev, passage, name in self._db.execute(stmt).all()]
+
+    def list_passages_with_embeddings(
+        self, project_id: str, *, model_name: str
+    ) -> list[tuple[Passage, str, list[float] | None]]:
+        stmt = (
+            select(Passage, Document.original_name, PassageEmbedding.vector)
+            .join(Document, Document.id == Passage.document_id)
+            .outerjoin(
+                PassageEmbedding,
+                (PassageEmbedding.passage_id == Passage.id) & (PassageEmbedding.model_name == model_name),
+            )
+            .where(Document.project_id == project_id)
+            .order_by(Document.created_at.asc(), Passage.ordinal.asc())
+        )
+        return [
+            (passage, str(doc_name), list(vec) if vec is not None else None)
+            for passage, doc_name, vec in self._db.execute(stmt).all()
+        ]
 
     def get_owned_evidence(self, evidence_id: str, owner_id: str) -> ClaimEvidence | None:
         stmt = (

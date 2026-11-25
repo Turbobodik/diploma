@@ -5,7 +5,6 @@ import {
   LogOut,
   Moon,
   Network,
-  Palette,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -101,13 +100,6 @@ export function AppShell({ children }: AppShellProps) {
             </NavLink>
           ) : null}
           <NavLink
-            to="/design-system"
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <Palette size={18} aria-hidden="true" />
-            <span>Design System</span>
-          </NavLink>
-          <NavLink
             to="/settings"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
@@ -138,7 +130,7 @@ export function AppShell({ children }: AppShellProps) {
               size="sm"
               className="sidebar-toggle-desktop"
               onClick={handleToggleSidebar}
-              aria-label={sidebarCollapsed ? 'Показать боковое меню' : 'Скрыть боковое меню'}
+              aria-label={sidebarCollapsed ? 'Show sidebar navigation' : 'Hide sidebar navigation'}
               aria-expanded={!sidebarCollapsed}
               id="sidebar-toggle-btn"
             >
@@ -147,7 +139,7 @@ export function AppShell({ children }: AppShellProps) {
               ) : (
                 <PanelLeftClose size={17} aria-hidden="true" />
               )}
-              <span>{sidebarCollapsed ? 'Меню' : 'Скрыть меню'}</span>
+              <span>{sidebarCollapsed ? 'Menu' : 'Hide menu'}</span>
             </Button>
 
             {sidebarCollapsed ? (
@@ -222,13 +214,6 @@ export function AppShell({ children }: AppShellProps) {
         >
           <Network size={18} aria-hidden="true" />
           <span>Map</span>
-        </NavLink>
-        <NavLink
-          to="/design-system"
-          className={({ isActive }) => `mobile-nav-link ${isActive ? 'active' : ''}`}
-        >
-          <Palette size={18} aria-hidden="true" />
-          <span>UI Kit</span>
         </NavLink>
         <NavLink
           to="/settings"

@@ -72,6 +72,43 @@ def create_demo_project(
     return ProjectService(db).create_demo_project(user_id, preset_id=preset, sync=sync)
 
 
+@router.get(
+    "/{project_id}",
+    response_model=ProjectOut,
+    summary="Retrieve metadata and counters for a single owned project",
+    responses={
+        401: {"model": ErrorOut, "description": "Unauthorized"},
+        404: {"model": ErrorOut, "description": "Project not found or owned by another user"},
+    },
+)
+def get_project(
+    project_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    return ProjectService(db).get_project(user_id, str(project_id))
+
+
+@router.patch(
+    "/{project_id}",
+    response_model=ProjectOut,
+    summary="Rename an existing project workspace",
+    responses={
+        401: {"model": ErrorOut, "description": "Unauthorized"},
+        404: {"model": ErrorOut, "description": "Project not found or owned by another user"},
+        409: {"model": ErrorOut, "description": "Duplicate project name for this owner"},
+        422: {"model": ErrorOut, "description": "Empty or invalid project name"},
+    },
+)
+def rename_project(
+    project_id: UUID,
+    body: ProjectIn,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+) -> ProjectOut:
+    return ProjectService(db).rename_project(user_id, str(project_id), body)
+
+
 @router.delete(
     "/{project_id}",
     response_model=DeleteOut,

@@ -42,6 +42,7 @@ def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         max_claims_per_doc=20,
         passage_target_chars=500,
         top_k=5,
+        min_retrieval_score=0.20,
         ml_batch_size=8,
         ml_device="cpu",
         log_level="WARNING",
@@ -52,6 +53,7 @@ def api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("app.services.auth_service.settings", test_settings)
     monkeypatch.setattr("app.services.project_service.settings", test_settings)
     monkeypatch.setattr("app.services.document_service.settings", test_settings)
+    monkeypatch.setattr("app.services.graph_service.settings", test_settings)
     monkeypatch.setattr("app.core.rate_limit.settings", test_settings)
     monkeypatch.setattr(pipeline_mod, "default_settings", test_settings)
     monkeypatch.setattr(pipeline_mod, "_cached_components", None)
@@ -304,4 +306,98 @@ def test_demo_project_launches_russian_cyberleninka_example_with_support_and_con
     # Unknown preset -> 404
     missing = api_client.post("/api/v1/projects/demo?preset=does-not-exist", headers=headers)
     assert missing.status_code == 404
+
+    # Cross-document only filter excludes intra-document passages
+    cross_claims = api_client.get(
+        f"/api/v1/projects/{proj['id']}/claims?cross_document_only=true",
+        headers=headers,
+    )
+    assert cross_claims.status_code == 200
+    for c in cross_claims.json()["claims"]:
+        for ev in c["evidence"]:
+            assert ev["document_id"] != c["source_document_id"]
+
+    cross_graph = api_client.get(
+        f"/api/v1/projects/{proj['id']}/graph?include_neutral=false&cross_document_only=true",
+        headers=headers,
+    )
+    assert cross_graph.status_code == 200
+    assert all(
+        e["label"] != "neutral"
+        for e in cross_graph.json()["edges"]
+        if e["kind"] == "evidence"
+    )
+
+    # Ad-hoc custom claim verification (Russian text supported!)
+    verify_res = api_client.post(
+        f"/api/v1/projects/{proj['id']}/verify",
+        json={
+            "claim_text": "Гибридный формат занятости повышает удержание персонала в IT-компаниях.",
+            "top_k": 5,
+            "include_neutral": True,
+        },
+        headers=headers,
+    )
+    assert verify_res.status_code == 200, verify_res.text
+    vdata = verify_res.json()
+    assert vdata["verdict"] == "supported"
+    assert vdata["checked_passages"] >= 1
+    assert any(ev["model_label"] == "entailment" for ev in vdata["evidence"])
+
+    # Document context endpoint returns surrounding text and exact highlight span
+    first_ev = vdata["evidence"][0]
+    ctx_res = api_client.get(
+        f"/api/v1/projects/{proj['id']}/documents/{first_ev['document_id']}/context",
+        params={"char_start": first_ev["char_start"], "char_end": first_ev["char_end"], "window": 300},
+        headers=headers,
+    )
+    assert ctx_res.status_code == 200, ctx_res.text
+    ctx = ctx_res.json()
+    highlighted = ctx["excerpt"][ctx["highlight_start"] : ctx["highlight_end"]]
+    assert highlighted == first_ev["passage_text"]
+    assert ctx["total_chars"] >= len(highlighted)
+
+    # Get single project + rename project
+    fetched = api_client.get(f"/api/v1/projects/{proj['id']}", headers=headers)
+    assert fetched.status_code == 200 and fetched.json()["name"] == proj["name"]
+
+    renamed = api_client.patch(
+        f"/api/v1/projects/{proj['id']}",
+        json={"name": "Renamed Remote Work Review"},
+        headers=headers,
+    )
+    assert renamed.status_code == 200 and renamed.json()["name"] == "Renamed Remote Work Review"
+    # Duplicate rename against second project -> 409
+    dup_rename = api_client.patch(
+        f"/api/v1/projects/{proj['id']}",
+        json={"name": second.json()["name"]},
+        headers=headers,
+    )
+    assert dup_rename.status_code == 409
+
+    # Delete a single document from project
+    del_doc = api_client.delete(
+        f"/api/v1/projects/{proj['id']}/documents/{first_ev['document_id']}",
+        headers=headers,
+    )
+    assert del_doc.status_code == 200 and del_doc.json()["deleted"] == first_ev["document_id"]
+    after_docs = api_client.get(f"/api/v1/projects/{proj['id']}/documents", headers=headers)
+    assert after_docs.status_code == 200 and after_docs.json()["total"] == 1
+
+
+def test_guest_demo_login_creates_isolated_session_and_demo_project(api_client: TestClient):
+    res = api_client.post("/api/v1/auth/guest")
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["token_type"] == "bearer"
+    assert body["user"]["display_name"] == "Guest Researcher"
+    assert body["demo_project_id"]
+
+    headers = {"Authorization": f"Bearer {body['token']}"}
+    proj = api_client.get(f"/api/v1/projects/{body['demo_project_id']}", headers=headers)
+    assert proj.status_code == 200
+    assert proj.json()["document_count"] == 2
+    assert proj.json()["claim_count"] >= 4
+
+
 

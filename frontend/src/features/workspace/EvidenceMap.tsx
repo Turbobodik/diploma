@@ -5,12 +5,22 @@ import {
   LayoutGrid,
   Maximize2,
   Network,
+  RotateCcw,
   Scale,
   Sparkles,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { memo, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type WheelEvent,
+} from 'react';
 
 import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
@@ -33,13 +43,26 @@ export interface EvidenceMapProps {
   graph: GraphResponse | null;
   selectedClaimId: string | null;
   selectedPassageId?: string | null;
+  hasActiveFilters?: boolean;
   onSelectClaim: (claimId: string) => void;
   onSelectPassage?: (passageId: string) => void;
+  onResetFilters?: () => void;
+  onShowNeutral?: () => void;
 }
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4.0;
 const AUTO_FOCUS_THRESHOLD = 24;
+
+function clampZoom(next: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2))));
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
 
 function shortFilename(name: string, maxLen = 26): string {
   if (name.length <= maxLen) return name;
@@ -72,8 +95,11 @@ export const EvidenceMap = memo(function EvidenceMap({
   graph,
   selectedClaimId,
   selectedPassageId = null,
+  hasActiveFilters = false,
   onSelectClaim,
   onSelectPassage,
+  onResetFilters,
+  onShowNeutral,
 }: EvidenceMapProps) {
   const isLargeGraph = (graph?.nodes.length ?? 0) > AUTO_FOCUS_THRESHOLD;
   const [focusOverride, setFocusOverride] = useState<boolean | null>(null);
@@ -125,30 +151,18 @@ export const EvidenceMap = memo(function EvidenceMap({
     return computeClustersLayout(graph, { showUnverified: effectiveShowUnverified });
   }, [graph, layoutMode, activeClaimNodeId, effectiveShowUnverified]);
 
-  if (!graph || graph.nodes.length === 0 || !layout) {
-    return (
-      <EmptyState
-        icon={<Network size={22} />}
-        title="No evidence map yet"
-        description="Upload at least one scientific document and run the analysis pipeline to generate the interactive claim–evidence graph."
-      />
-    );
-  }
-
   const activeClaimIdx = effectiveClaimId ? allClaimIds.indexOf(effectiveClaimId) : -1;
 
-  const clampZoom = (next: number) =>
-    Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(next.toFixed(2))));
+  const handleZoomIn = useCallback(() => setZoom((z) => clampZoom(z + 0.2)), []);
+  const handleZoomOut = useCallback(() => setZoom((z) => clampZoom(z - 0.2)), []);
 
-  const handleZoomIn = () => setZoom((z) => clampZoom(z + 0.2));
-  const handleZoomOut = () => setZoom((z) => clampZoom(z - 0.2));
-
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-  };
+  }, []);
 
-  const handleFitView = () => {
+  const handleFitView = useCallback(() => {
+    if (!layout) return;
     const rect = viewportRef.current?.getBoundingClientRect();
     if (!rect || rect.width === 0 || rect.height === 0) {
       handleReset();
@@ -156,24 +170,144 @@ export const EvidenceMap = memo(function EvidenceMap({
     }
     const scaleX = (rect.width - 24) / layout.canvasWidth;
     const scaleY = (rect.height - 24) / layout.canvasHeight;
-    const fitted = clampZoom(Math.min(scaleX, scaleY, 1.15));
+    const fitted = clampZoom(Math.min(scaleX, scaleY, 1.05));
     const offsetX = Math.max(12, (rect.width - layout.canvasWidth * fitted) / 2);
     setZoom(fitted);
     setPan({ x: offsetX, y: 10 });
-  };
+  }, [layout, handleReset]);
+
+  const handleStepClaim = useCallback(
+    (delta: -1 | 1) => {
+      if (allClaimIds.length === 0) return;
+      const nextIdx =
+        (Math.max(0, activeClaimIdx) + delta + allClaimIds.length) % allClaimIds.length;
+      onSelectClaim(allClaimIds[nextIdx]);
+      setPan((prev) => ({ x: prev.x, y: 10 }));
+    },
+    [allClaimIds, activeClaimIdx, onSelectClaim],
+  );
+
+  // Auto-fit map horizontally on initial render or layout switch when wider than viewport
+  const layoutFitKey = layout
+    ? `${layoutMode}:${layout.canvasWidth}:${graph?.nodes.length ?? 0}`
+    : '';
+  useEffect(() => {
+    if (!layout || !layoutFitKey) return;
+    const rafId = window.requestAnimationFrame(() => {
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      if (layout.canvasWidth > rect.width - 24) {
+        const fitted = clampZoom(Math.min((rect.width - 24) / layout.canvasWidth, 1));
+        const offsetX = Math.max(12, (rect.width - layout.canvasWidth * fitted) / 2);
+        setZoom(fitted);
+        setPan({ x: offsetX, y: 10 });
+      } else {
+        const offsetX = Math.max(12, (rect.width - layout.canvasWidth) / 2);
+        setZoom(1);
+        setPan({ x: offsetX, y: 10 });
+      }
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [layoutFitKey, layout]);
+
+  // Keyboard navigation: Left/Right step claims, F fits map, +/- zooms
+  useEffect(() => {
+    if (!layout || allClaimIds.length === 0) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || isEditableTarget(event.target)) {
+        return;
+      }
+      if (event.key === 'ArrowLeft' && allClaimIds.length > 1) {
+        event.preventDefault();
+        handleStepClaim(-1);
+      } else if (event.key === 'ArrowRight' && allClaimIds.length > 1) {
+        event.preventDefault();
+        handleStepClaim(1);
+      } else if (event.key === 'f' || event.key === 'F') {
+        event.preventDefault();
+        handleFitView();
+      } else if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        handleZoomIn();
+      } else if (event.key === '-') {
+        event.preventDefault();
+        handleZoomOut();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [layout, allClaimIds.length, handleStepClaim, handleFitView, handleZoomIn, handleZoomOut]);
+
+  if (!graph || graph.nodes.length === 0 || !layout) {
+    return (
+      <EmptyState
+        icon={<Network size={22} />}
+        title={hasActiveFilters ? 'No matching evidence on the map' : 'No evidence map yet'}
+        description={
+          hasActiveFilters
+            ? 'Your active filters hide all claims or evidence edges. Reset filters or enable neutral context edges to explore the corpus.'
+            : 'Upload at least one scientific document and run the analysis pipeline to generate the interactive claim–evidence graph.'
+        }
+        action={
+          hasActiveFilters && onResetFilters ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onResetFilters}
+              id="map-reset-filters-btn"
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+              Reset filters
+            </Button>
+          ) : undefined
+        }
+      />
+    );
+  }
+
+  if (allClaimIds.length === 0 || layout.cards.length === 0) {
+    return (
+      <EmptyState
+        icon={<Network size={22} />}
+        title={
+          hasActiveFilters
+            ? 'No supporting or contradicting links match these filters'
+            : 'No claims extracted yet'
+        }
+        description={
+          hasActiveFilters
+            ? 'Try resetting filters (for example, turning off Cross-document only or verdict filters) or showing neutral context edges.'
+            : 'Run analysis to extract factual claims and link them to supporting or contradicting passages.'
+        }
+        action={
+          hasActiveFilters ? (
+            <div className="cluster">
+              {onResetFilters ? (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={onResetFilters}
+                  id="map-reset-filters-btn"
+                >
+                  <RotateCcw size={14} aria-hidden="true" />
+                  Reset filters
+                </Button>
+              ) : null}
+              {onShowNeutral ? (
+                <Button variant="secondary" size="sm" onClick={onShowNeutral}>
+                  Show neutral context
+                </Button>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+      />
+    );
+  }
 
   const handleSelectLayout = (next: MapLayoutMode) => {
     setLayoutOverride(next);
     setFocusOverride(next === 'balance');
-    setPan({ x: 0, y: 0 });
-    setZoom(1);
-  };
-
-  const handleStepClaim = (delta: -1 | 1) => {
-    if (allClaimIds.length === 0) return;
-    const nextIdx = (Math.max(0, activeClaimIdx) + delta + allClaimIds.length) % allClaimIds.length;
-    onSelectClaim(allClaimIds[nextIdx]);
-    setPan({ x: 0, y: 0 });
   };
 
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
@@ -291,7 +425,7 @@ export const EvidenceMap = memo(function EvidenceMap({
               id="graph-mode-clusters"
             >
               <LayoutGrid size={14} aria-hidden="true" />
-              Острова
+              Islands
             </button>
             <button
               type="button"
@@ -301,7 +435,7 @@ export const EvidenceMap = memo(function EvidenceMap({
               id="graph-mode-balance"
             >
               <Scale size={14} aria-hidden="true" />
-              Весы
+              Scales
             </button>
             <button
               type="button"
@@ -311,7 +445,7 @@ export const EvidenceMap = memo(function EvidenceMap({
               id="graph-mode-constellation"
             >
               <Sparkles size={14} aria-hidden="true" />
-              Созвездие
+              Constellation
             </button>
           </div>
         </div>
@@ -327,7 +461,7 @@ export const EvidenceMap = memo(function EvidenceMap({
               aria-pressed={showUnverified}
               id="graph-toggle-unverified"
             >
-              Без доказательств ({unverifiedCount})
+              Unverified ({unverifiedCount})
             </Button>
           ) : null}
 
@@ -506,12 +640,16 @@ export const EvidenceMap = memo(function EvidenceMap({
                             : 1.3
                         : 1.4
                     }
-                    strokeDasharray={item.edge.kind === 'extracted_from' ? '4 4' : undefined}
+                    strokeDasharray={
+                      item.edge.kind === 'extracted_from' || item.edge.label === 'neutral'
+                        ? '4 4'
+                        : undefined
+                    }
                     opacity={
                       highlighted
                         ? item.edge.kind === 'evidence'
                           ? item.edge.label === 'neutral'
-                            ? 0.72
+                            ? 0.65
                             : 1
                           : 0.75
                         : 0.16
@@ -523,10 +661,15 @@ export const EvidenceMap = memo(function EvidenceMap({
 
             {/* Layer 2: Dimmed edge pills (behind cards/highlighted pills so zero visual clash) */}
             {dimPills.map((item) => {
-              const pillText = `${shortVerdictEdgeLabel(item.edge.label)}${
-                typeof item.edge.score === 'number' ? ` ${Math.round(item.edge.score * 100)}%` : ''
-              }`;
-              const pillW = Math.max(96, pillText.length * 6.4 + 16);
+              const isNeutral = item.edge.label === 'neutral';
+              const pillText = isNeutral
+                ? shortVerdictEdgeLabel(item.edge.label)
+                : `${shortVerdictEdgeLabel(item.edge.label)}${
+                    typeof item.edge.score === 'number'
+                      ? ` ${Math.round(item.edge.score * 100)}%`
+                      : ''
+                  }`;
+              const pillW = Math.max(82, pillText.length * 6.4 + 16);
               return (
                 <g
                   key={`dim-pill:${item.key}`}
@@ -541,6 +684,11 @@ export const EvidenceMap = memo(function EvidenceMap({
                     }
                   }}
                 >
+                  <title>
+                    {isNeutral
+                      ? 'Checked context — neither supports nor refutes this claim'
+                      : `Model confidence: ${Math.round((item.edge.score ?? 0) * 100)}% (${shortVerdictEdgeLabel(item.edge.label)})`}
+                  </title>
                   <rect
                     x={item.pillX - pillW / 2}
                     y={item.pillY - 10}
@@ -612,6 +760,9 @@ export const EvidenceMap = memo(function EvidenceMap({
                   ? (layout.edges.find((e) => e.targetKey === card.key)?.claimNodeId ?? null)
                   : null;
 
+              const isNeutralPassage =
+                node.type === 'passage' && card.linkedEdge?.label === 'neutral';
+
               return (
                 <g
                   key={card.key}
@@ -669,11 +820,11 @@ export const EvidenceMap = memo(function EvidenceMap({
                         }`
                       : node.type === 'passage' && card.linkedEdge?.label
                         ? `${shortVerdictEdgeLabel(card.linkedEdge.label).toUpperCase()}${
-                            typeof card.linkedEdge.score === 'number'
+                            !isNeutralPassage && typeof card.linkedEdge.score === 'number'
                               ? ` · ${Math.round(card.linkedEdge.score * 100)}%`
                               : ''
-                          }${card.isCrossDoc ? ' · ДРУГОЙ ФАЙЛ' : ''}`
-                        : 'ИСТОЧНИК'}
+                          }${card.isCrossDoc ? ' · OTHER PAPER' : ''}`
+                        : 'SOURCE'}
                   </text>
 
                   <text
@@ -699,7 +850,7 @@ export const EvidenceMap = memo(function EvidenceMap({
                       fontWeight="500"
                     >
                       {shortFilename(card.sourceName, Math.max(18, charsPerLine - 2))}
-                      {node.page_no ? ` · стр. ${node.page_no}` : ''}
+                      {node.page_no ? ` · p. ${node.page_no}` : ''}
                     </text>
                   ) : null}
                 </g>
@@ -708,12 +859,16 @@ export const EvidenceMap = memo(function EvidenceMap({
 
             {/* Layer 4: Highlighted edge verdict pills — brightly illuminated on selection/hover */}
             {brightPills.map((item) => {
-              const pillText = `${shortVerdictEdgeLabel(item.edge.label)}${
-                typeof item.edge.score === 'number' ? ` ${Math.round(item.edge.score * 100)}%` : ''
-              }`;
-              const isHovered = hoveredEdgeKey === item.key;
-              const pillW = Math.max(108, pillText.length * 6.8 + 20);
               const isNeutral = item.edge.label === 'neutral';
+              const pillText = isNeutral
+                ? shortVerdictEdgeLabel(item.edge.label)
+                : `${shortVerdictEdgeLabel(item.edge.label)}${
+                    typeof item.edge.score === 'number'
+                      ? ` ${Math.round(item.edge.score * 100)}%`
+                      : ''
+                  }`;
+              const isHovered = hoveredEdgeKey === item.key;
+              const pillW = Math.max(92, pillText.length * 6.8 + 20);
 
               return (
                 <g
@@ -728,6 +883,11 @@ export const EvidenceMap = memo(function EvidenceMap({
                     }
                   }}
                 >
+                  <title>
+                    {isNeutral
+                      ? 'Checked context — neither supports nor refutes this claim'
+                      : `Model confidence: ${Math.round((item.edge.score ?? 0) * 100)}% (${shortVerdictEdgeLabel(item.edge.label)})`}
+                  </title>
                   <rect
                     x={item.pillX - pillW / 2}
                     y={item.pillY - 11.5}
@@ -751,6 +911,45 @@ export const EvidenceMap = memo(function EvidenceMap({
                 </g>
               );
             })}
+            {/* Layer 5: "+N more evidence" overflow pills in Islands mode */}
+            {(layout.overflowPills ?? []).map((pill) => (
+              <g
+                key={pill.key}
+                className="graph-node"
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${pill.hiddenCount} more evidence passages in Claim Inspector`}
+                onClick={() => onSelectClaim(pill.claimNodeId.replace(/^claim:/, ''))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelectClaim(pill.claimNodeId.replace(/^claim:/, ''));
+                  }
+                }}
+              >
+                <rect
+                  x={pill.x}
+                  y={pill.y}
+                  width={pill.width}
+                  height={24}
+                  rx={8}
+                  fill="var(--bg-subtle)"
+                  stroke="var(--border-strong)"
+                  strokeDasharray="4 3"
+                  strokeWidth={1.1}
+                />
+                <text
+                  x={pill.x + pill.width / 2}
+                  y={pill.y + 15.5}
+                  textAnchor="middle"
+                  fontSize="10.5"
+                  fontWeight="700"
+                  fill="var(--accent-primary-text)"
+                >
+                  +{pill.hiddenCount} more evidence in Inspector →
+                </text>
+              </g>
+            ))}
           </g>
         </svg>
       </div>
@@ -758,19 +957,24 @@ export const EvidenceMap = memo(function EvidenceMap({
       <div className="graph-legend">
         <span className="legend-item">
           <span className="legend-swatch entailment" aria-hidden="true" />
-          Доказано / Подтверждает
+          Supports (entailment)
         </span>
         <span className="legend-item">
           <span className="legend-swatch contradiction" aria-hidden="true" />
-          Опровергнуто / Противоречит
+          Refutes (contradiction)
         </span>
         <span className="legend-item">
           <span className="legend-swatch neutral" aria-hidden="true" />
-          Нейтрально
+          Context only (no verdict)
         </span>
-        <span className="text-muted">
-          Наведите на ребро или карточку для подсветки · Переключайте виды: Острова / Весы /
-          Созвездие
+        <span className="graph-kbd-hints text-muted">
+          {allClaimIds.length > 1 ? (
+            <>
+              <kbd className="kbd-key">←</kbd> <kbd className="kbd-key">→</kbd> switch claim ·{' '}
+            </>
+          ) : null}
+          <kbd className="kbd-key">F</kbd> fit view · <kbd className="kbd-key">+</kbd>{' '}
+          <kbd className="kbd-key">-</kbd> zoom · drag to pan
         </span>
       </div>
     </section>

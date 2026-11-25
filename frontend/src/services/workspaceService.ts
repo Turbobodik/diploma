@@ -1,6 +1,8 @@
 import type {
   AnalyzeStartedResponse,
   ClaimsResponse,
+  DeleteProjectResponse,
+  DocumentContextResponse,
   DocumentItem,
   DocumentListResponse,
   ExportFormat,
@@ -9,6 +11,8 @@ import type {
   JobListResponse,
   NliLabel,
   OverrideResponse,
+  VerifyClaimRequest,
+  VerifyClaimResponse,
 } from '../models/api';
 import { httpClient } from './httpClient';
 
@@ -16,6 +20,7 @@ export interface ClaimsQueryParams {
   label?: NliLabel;
   document_id?: string;
   search?: string;
+  cross_document_only?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -24,6 +29,13 @@ export interface GraphQueryParams {
   label?: NliLabel;
   document_id?: string;
   include_neutral?: boolean;
+  cross_document_only?: boolean;
+}
+
+export interface DocumentContextParams {
+  char_start: number;
+  char_end: number;
+  window?: number;
 }
 
 export const workspaceService = {
@@ -31,6 +43,25 @@ export const workspaceService = {
     const { data } = await httpClient.get<DocumentListResponse>(
       `/api/v1/projects/${projectId}/documents`,
       { params: { limit, offset } },
+    );
+    return data;
+  },
+
+  async getDocumentContext(
+    projectId: string,
+    documentId: string,
+    params: DocumentContextParams,
+  ): Promise<DocumentContextResponse> {
+    const { data } = await httpClient.get<DocumentContextResponse>(
+      `/api/v1/projects/${projectId}/documents/${documentId}/context`,
+      { params },
+    );
+    return data;
+  },
+
+  async deleteDocument(projectId: string, documentId: string): Promise<DeleteProjectResponse> {
+    const { data } = await httpClient.delete<DeleteProjectResponse>(
+      `/api/v1/projects/${projectId}/documents/${documentId}`,
     );
     return data;
   },
@@ -73,6 +104,14 @@ export const workspaceService = {
     return data;
   },
 
+  async verifyClaim(projectId: string, payload: VerifyClaimRequest): Promise<VerifyClaimResponse> {
+    const { data } = await httpClient.post<VerifyClaimResponse>(
+      `/api/v1/projects/${projectId}/verify`,
+      payload,
+    );
+    return data;
+  },
+
   async overrideEvidenceLabel(
     evidenceId: string,
     userLabel: NliLabel | null,
@@ -86,7 +125,7 @@ export const workspaceService = {
   async exportProject(
     projectId: string,
     format: ExportFormat,
-    filters: { label?: NliLabel; document_id?: string } = {},
+    filters: { label?: NliLabel; document_id?: string; cross_document_only?: boolean } = {},
   ): Promise<Blob> {
     const { data } = await httpClient.get<Blob>(`/api/v1/projects/${projectId}/export`, {
       params: { format, ...filters },

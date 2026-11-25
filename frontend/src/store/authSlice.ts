@@ -79,6 +79,27 @@ export const registerUser = createAsyncThunk<
   }
 });
 
+export const loginGuestDemo = createAsyncThunk<
+  { token: string; user: UserProfile; demoProjectId: string },
+  void,
+  { rejectValue: string }
+>('auth/guestDemo', async (_, { dispatch, rejectWithValue }) => {
+  try {
+    const res = await authService.guestDemo();
+    tokenStorage.setToken(res.token);
+    dispatch(
+      pushToast({
+        variant: 'success',
+        title: 'Guest demo ready',
+        description: 'Opening the preloaded Russian CyberLeninka evidence map.',
+      }),
+    );
+    return { token: res.token, user: res.user, demoProjectId: res.demo_project_id };
+  } catch (err) {
+    return rejectWithValue(normalizeAxiosError(err).message);
+  }
+});
+
 export const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -141,6 +162,20 @@ export const authSlice = createSlice({
       .addCase(registerUser.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload ?? 'Registration failed.';
+      })
+      .addCase(loginGuestDemo.pending, (state) => {
+        state.status = 'loading';
+        state.error = null;
+      })
+      .addCase(loginGuestDemo.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.token = action.payload.token;
+        state.user = action.payload.user;
+        state.initialized = true;
+      })
+      .addCase(loginGuestDemo.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload ?? 'Could not start guest demo.';
       });
   },
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import projectsReducer, {
   createDemoProject,
+  renameProject,
   selectFilteredSortedProjects,
   setProjectSearch,
   setProjectSort,
@@ -36,6 +37,7 @@ const BASE_STATE: ProjectsState = {
   status: 'succeeded',
   creating: false,
   creatingDemo: false,
+  renamingId: null,
   deletingId: null,
   error: null,
   searchQuery: '',
@@ -79,5 +81,15 @@ describe('projectsSlice', () => {
     expect(fulfilledState.creatingDemo).toBe(false);
     expect(fulfilledState.total).toBe(4);
     expect(fulfilledState.items[0].id).toBe('demo-1');
+  });
+
+  it('updates project name in place on renameProject.fulfilled', () => {
+    const renamed = { ...BASE_STATE.items[0], name: 'Climate Models v2' };
+    const next = projectsReducer(
+      BASE_STATE,
+      renameProject.fulfilled(renamed, 'req-2', { projectId: '1', name: 'Climate Models v2' }),
+    );
+    expect(next.renamingId).toBeNull();
+    expect(next.items.find((p) => p.id === '1')?.name).toBe('Climate Models v2');
   });
 });

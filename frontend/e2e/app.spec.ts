@@ -129,6 +129,23 @@ async function setupMockApi(page: Page, state: MockApiState) {
       return;
     }
 
+    if (/^\/api\/v1\/projects\/[^/]+$/.test(path) && method === 'GET') {
+      const id = path.split('/').pop();
+      const found = state.projects.find((p) => p.id === id) ?? {
+        id: id ?? 'proj-1',
+        name: 'SciFact Evidence Study',
+        document_count: state.documents.length,
+        claim_count: state.analyzed ? 1 : 0,
+        created_at: '2026-11-24T10:00:00+00:00',
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(found),
+      });
+      return;
+    }
+
     if (path.endsWith('/documents') && method === 'GET') {
       await route.fulfill({
         status: 200,
@@ -317,6 +334,59 @@ async function setupMockApi(page: Page, state: MockApiState) {
       return;
     }
 
+    if (path.includes('/documents/') && path.endsWith('/context') && method === 'GET') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          document_id: 'doc-1',
+          document_name: 'scifact_sample.txt',
+          page_no: 1,
+          total_chars: 180,
+          window_start: 0,
+          window_end: 180,
+          highlight_start: 65,
+          highlight_end: 141,
+          excerpt:
+            'Dense retrieval improves scientific claim verification accuracy. Experiments across SciFact show higher macro-F1 with dense passage retrieval. Additional details follow.',
+          has_before: false,
+          has_after: false,
+        }),
+      });
+      return;
+    }
+
+    if (path.endsWith('/verify') && method === 'POST') {
+      const body = req.postDataJSON() as { claim_text: string };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          claim_text: body.claim_text,
+          verdict: 'supported',
+          ml_backend: 'transformers',
+          checked_passages: 1,
+          evidence: [
+            {
+              passage_id: 'p-1',
+              document_id: 'doc-1',
+              document_name: 'scifact_sample.txt',
+              page_no: 1,
+              char_start: 65,
+              char_end: 141,
+              passage_text:
+                'Experiments across SciFact show higher macro-F1 with dense passage retrieval.',
+              retrieval_score: 0.89,
+              model_name: 'cross-encoder/nli-deberta-v3-xsmall',
+              model_label: 'entailment',
+              model_score: 0.91,
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
     if (path.startsWith('/api/v1/evidence/') && method === 'PATCH') {
       const body = req.postDataJSON() as { user_label: string | null };
       state.userOverride = body.user_label;
@@ -372,6 +442,9 @@ test('full researcher flow: login validation, project creation, upload, analysis
   await page.getByRole('link', { name: 'SciFact Evidence Study', exact: true }).click();
   await expect(page).toHaveURL(/\/projects\/proj-1$/);
 
+  // Verify ML engine status indicator is visible
+  await expect(page.locator('#ml-status-banner')).toContainText(/Neural NLI active/i);
+
   await page.setInputFiles('#document-file-input', {
     name: 'scifact_sample.txt',
     mimeType: 'text/plain',
@@ -383,14 +456,33 @@ test('full researcher flow: login validation, project creation, upload, analysis
     page.getByRole('region', { name: 'Corpus documents' }).getByText('scifact_sample.txt'),
   ).toBeVisible();
 
+  // Verify ad-hoc custom claim checking against uploaded corpus
+  await page.fill('#quick-verify-input', 'Dense retrieval improves verification recall.');
+  await page.click('#quick-verify-submit-btn');
+  await expect(page.getByRole('region', { name: 'Verify your own claim' })).toContainText(
+    'Supported',
+  );
+
   await page.click('#run-analysis-btn');
   // Reload workspace to display completed analysis results
   await page.getByLabel('Reload workspace').click();
 
-  // Inspect Evidence Map and zoom
+  // Inspect Evidence Map and zoom; neutral edges are off by default
+  await expect(page.locator('#filter-neutral-checkbox')).not.toBeChecked();
   await expect(page.getByRole('region', { name: 'Interactive evidence map' })).toBeVisible();
   await page.click('#graph-zoom-in');
   await expect(page.getByText('120%')).toBeVisible();
+
+  // Open document context modal from Claim Inspector
+  await page
+    .getByRole('region', { name: 'Claim Inspector overlay' })
+    .getByRole('button', { name: /Read in document/i })
+    .first()
+    .click();
+  await expect(page.getByLabel('Document context excerpt')).toContainText(
+    'Experiments across SciFact show higher macro-F1',
+  );
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
 
   // Override NLI label while preserving original model prediction
   await page.selectOption('#override-select-ev-1', 'contradiction');
